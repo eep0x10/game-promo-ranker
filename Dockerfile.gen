@@ -17,9 +17,12 @@ WORKDIR /app
 # Só o gerador precisa de requests + beautifulsoup4 (sem flask/gunicorn).
 RUN pip install --no-cache-dir "requests>=2.31" "beautifulsoup4>=4.12"
 
-COPY steam_sale_ranker.py ./
+COPY steam_sale_ranker.py free_games.py ./
 RUN mkdir -p /app/data
 
-# Default: 20 páginas → data/games.json. Sobrescreva via args do `docker run`.
+# Default: gera as promoções da Steam. Para os jogos grátis (Epic), rode com
+# entrypoint sobrescrito:
+#   docker run --rm --entrypoint python -v steam_data:/app/data steam-gen \
+#       free_games.py --json data/free_games.json
 ENTRYPOINT ["python", "steam_sale_ranker.py"]
 CMD ["20", "--json", "data/games.json"]

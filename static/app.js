@@ -13,6 +13,8 @@ let OWNED = new Set();
 let COMPARE_ACTIVE = false;
 // Modo "ver apenas wishlist" (filtro dinâmico após comparar perfil)
 let WISHLIST_ONLY = false;
+// Última resposta de /api/free-games (carregada sob demanda ao abrir a aba)
+let FREE_PAYLOAD = null;
 
 // Por padrão a lista mostra só score CUTOFF–10; o resto fica num "Ver mais".
 const SCORE_CUTOFF = 7.0;
@@ -151,26 +153,122 @@ function blockHtml(block, opts) {
   return { html, count: total };
 }
 
+// ─── Filtros / busca ────────────────────────────────────────────────────────
+
+function collectGames() {
+  const out = [];
+  for (const block of (PAYLOAD.blocks || [])) {
+    for (const g of block.games) out.push({ g, color: block.color || "#888" });
+  }
+  return out;
+}
+
+function filterState() {
+  return {
+    q:       (((el("f-search")  || {}).value)   || "").trim().toLowerCase(),
+    minDisc: Number(((el("f-discount") || {}).value) || 0),
+    minPct:  Number(((el("f-review")   || {}).value) || 0),
+    sort:    ((el("f-sort")     || {}).value) || "score",
+    histOnly: !!((el("f-hist")  || {}).checked),
+  };
+}
+
+function filtersActive(f) {
+  return !!f.q || f.minDisc > 0 || f.minPct > 0 || f.histOnly || f.sort !== "score";
+}
+
+function passesFilter(g, f) {
+  if (f.q && !String(g.name || "").toLowerCase().includes(f.q)) return false;
+  if (f.minDisc && Number(g.discount) < f.minDisc) return false;
+  if (f.minPct && Number(g.pct_positive) < f.minPct) return false;
+  if (f.histOnly && !g.historical_low) return false;
+  return true;
+}
+
+// "R$ 1.299,90" → 1299.90 ; vazio/—  → Infinity (cai pro fim no sort asc)
+function priceNum(s) {
+  let t = String(s || "").replace(/[^\d.,]/g, "");
+  if (!t) return Infinity;
+  t = t.replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(t);
+  return isNaN(n) ? Infinity : n;
+}
+
+function sortGames(arr, sort) {
+  const cmp = {
+    score:    (a, b) => b.g.score - a.g.score,
+    discount: (a, b) => b.g.discount - a.g.discount,
+    reviews:  (a, b) => b.g.total_reviews - a.g.total_reviews,
+    pct:      (a, b) => (b.g.pct_positive - a.g.pct_positive) ||
+                        (b.g.total_reviews - a.g.total_reviews),
+    price:    (a, b) => priceNum(a.g.sale_price) - priceNum(b.g.sale_price),
+  }[sort] || ((a, b) => b.g.score - a.g.score);
+  arr.sort(cmp);
+}
+
+const TABLE_HEAD = `
+        <thead>
+          <tr>
+            <th>#</th><th>Nome</th><th>Desconto</th><th>Review%</th>
+            <th>Reviews</th><th>Preço Original</th><th>Preço Promo</th>
+            <th>Low Ever (BRL)</th><th>Score</th>
+          </tr>
+        </thead>`;
+
+// Lista plana (resultado de filtros/ordenação): sem split de score, tudo visível.
+function flatListHtml(items, label) {
+  let rows = "", rank = 0;
+  for (const it of items) {
+    const r = gameRow(it.g, rank + 1, it.color, false);
+    if (r) { rows += r; rank += 1; }
+  }
+  if (!rows) return "";
+  return `
+    <div class="block">
+      <div class="block-header" style="background:#33455c">
+        <span class="block-name">${escapeHtml(label)}</span>
+        <span class="block-count">${rank} jogos</span>
+      </div>
+      <table>${TABLE_HEAD}
+        <tbody>${rows}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+
 function renderGames() {
   if (!PAYLOAD) return;
   const root = el("games-root");
-  const blocks = PAYLOAD.blocks || [];
+  const f = filterState();
+  const active = filtersActive(f);
+  const flat = active || (COMPARE_ACTIVE && WISHLIST_ONLY);
 
-  // Modo "ver apenas wishlist": todos os jogos da wishlist em promoção, sem corte.
-  if (COMPARE_ACTIVE && WISHLIST_ONLY) {
-    let html = "";
-    for (const block of blocks) html += blockHtml(block, { mode: "wishlist" }).html;
-    root.innerHTML = html ||
-      '<div class="empty-tier">Nenhum jogo da sua wishlist está em promoção hoje.</div>';
+  const fc = el("f-clear");
+  if (fc) fc.classList.toggle("hidden", !active);
+
+  // Filtros ativos (ou só-wishlist) → lista plana ordenada, com TUDO que casa.
+  if (flat) {
+    let items = collectGames().filter(({ g }) => {
+      if (COMPARE_ACTIVE && OWNED.has(Number(g.appid))) return false;
+      if (COMPARE_ACTIVE && WISHLIST_ONLY && !WISHLIST.has(Number(g.appid))) return false;
+      return passesFilter(g, f);
+    });
+    sortGames(items, f.sort);
+    const label = (COMPARE_ACTIVE && WISHLIST_ONLY)
+      ? "Sua wishlist em promoção" : "Resultado dos filtros";
+    root.innerHTML = flatListHtml(items, label) ||
+      '<div class="empty-tier">Nenhum jogo com esses filtros.</div>';
     return;
   }
 
-  // Modo normal: cada bloco mostra score CUTOFF–10 + um "Ver mais" próprio
-  // ao fim revelando os jogos abaixo do corte daquele bloco.
+  // Padrão: blocos por sentimento, score CUTOFF–10 + "Ver mais" por bloco.
   let html = "";
-  for (const block of blocks) html += blockHtml(block, { mode: "normal" }).html;
+  for (const block of (PAYLOAD.blocks || [])) {
+    html += blockHtml(block, { mode: "normal" }).html;
+  }
   root.innerHTML = html || '<div class="empty-tier">Nenhum jogo a exibir.</div>';
-
   root.querySelectorAll(".block-tail-toggle").forEach((btn) => {
     btn.addEventListener("click", toggleBlockTail);
   });
@@ -194,6 +292,102 @@ function renderSubtitle() {
   const when = PAYLOAD.generated_at_human || PAYLOAD.generated_at || "—";
   const total = PAYLOAD.total_collected != null ? PAYLOAD.total_collected : "—";
   el("subtitle").textContent = `Gerado em ${when}  —  ${total} jogos coletados`;
+}
+
+// ─── Abas + Jogos grátis (Epic) ───────────────────────────────────────────────
+
+function setupTabs() {
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll(".tab-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  el("tab-deals").classList.toggle("hidden", tab !== "deals");
+  el("tab-free").classList.toggle("hidden", tab !== "free");
+  if (tab === "free" && FREE_PAYLOAD === null) loadFreeGames();
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function freeCard(item, kind) {
+  const cover = item.cover
+    ? `<img src="${escapeHtml(item.cover)}" alt="" loading="lazy">`
+    : '<div class="free-noimg">🎮</div>';
+  const plat = String(item.platform || "epic");
+  const platLabel = { epic: "Epic", psn: "PSN", prime: "Prime", gog: "GOG" }[plat] || plat;
+
+  let meta = "";
+  if (kind === "current") meta = item.free_until ? "Grátis até " + fmtDate(item.free_until) : "Grátis agora";
+  else if (kind === "upcoming") meta = item.free_from ? "Grátis a partir de " + fmtDate(item.free_from) : "Em breve";
+  else meta = item.first_seen ? "Foi grátis em " + fmtDate(item.first_seen) : "";
+
+  const orig = item.orig_price
+    ? `<span class="free-orig">${escapeHtml(item.orig_price)}</span>` : "";
+  const btnLabel = kind === "current" ? "Resgatar grátis" : "Ver na loja";
+  const btnCls = kind === "current" ? "free-btn" : "free-btn soon";
+
+  return `
+    <div class="free-card ${kind}">
+      <a class="free-cover" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">
+        ${cover}<span class="plat-badge plat-${escapeHtml(plat)}">${escapeHtml(platLabel)}</span>
+      </a>
+      <div class="free-body">
+        <div class="free-title">${escapeHtml(item.title)}</div>
+        <div class="free-sub">${escapeHtml(item.seller || "")} ${orig}</div>
+        <div class="free-meta">${escapeHtml(meta)}</div>
+        <a class="${btnCls}" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${btnLabel}</a>
+      </div>
+    </div>`;
+}
+
+function freeSection(title, items, kind) {
+  if (!items || !items.length) return "";
+  const cards = items.map((it) => freeCard(it, kind)).join("");
+  return `<h2 class="free-h2">${title} <span class="free-n">${items.length}</span></h2>
+          <div class="free-grid">${cards}</div>`;
+}
+
+function renderFree() {
+  if (!FREE_PAYLOAD) return;
+  el("free-subtitle").textContent =
+    "Atualizado em " + (FREE_PAYLOAD.generated_at_human || "—");
+
+  const cur = FREE_PAYLOAD.current || [];
+  const up = FREE_PAYLOAD.upcoming || [];
+  const curTitles = new Set(cur.map((c) => c.title));
+  const hist = (FREE_PAYLOAD.history || []).filter((h) => !curTitles.has(h.title));
+
+  let html = "";
+  html += freeSection("🎁 Grátis agora", cur, "current");
+  html += freeSection("⏳ Em breve", up, "upcoming");
+  html += freeSection("📜 Histórico — já passou", hist, "history");
+  el("free-root").innerHTML = html ||
+    '<div class="empty-tier">Nenhum jogo grátis no momento. Volte amanhã 🙂</div>';
+}
+
+async function loadFreeGames() {
+  const loading = el("free-loading");
+  try {
+    const r = await fetch("/api/free-games", { cache: "no-store" });
+    if (r.status === 503) {
+      loading.textContent = "Os jogos grátis ainda não foram coletados (aguarde o cron diário).";
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    FREE_PAYLOAD = await r.json();
+    loading.classList.add("hidden");
+    renderFree();
+  } catch (e) {
+    loading.textContent = "Falha ao carregar jogos grátis: " + e.message;
+  }
 }
 
 // ─── Carga inicial ────────────────────────────────────────────────────────────
@@ -313,6 +507,15 @@ function toggleWishlistOnly() {
   renderGames();
 }
 
+function clearFilters() {
+  if (el("f-search"))   el("f-search").value = "";
+  if (el("f-discount")) el("f-discount").value = "0";
+  if (el("f-review"))   el("f-review").value = "0";
+  if (el("f-sort"))     el("f-sort").value = "score";
+  if (el("f-hist"))     el("f-hist").checked = false;
+  renderGames();
+}
+
 // ─── Wire-up ──────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -322,5 +525,13 @@ document.addEventListener("DOMContentLoaded", () => {
   el("profile-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") compareProfile();
   });
+
+  setupTabs();
+  ["f-search", "f-discount", "f-review", "f-sort", "f-hist"].forEach((id) => {
+    const node = el(id);
+    if (node) node.addEventListener(id === "f-search" ? "input" : "change", renderGames);
+  });
+  if (el("f-clear")) el("f-clear").addEventListener("click", clearFilters);
+
   loadGames();
 });

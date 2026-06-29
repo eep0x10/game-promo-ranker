@@ -286,3 +286,174 @@ footer {
   font-size: 0.95rem;
   text-align: center;
 }
+
+/* ─── Abas ──────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 18px;
+  border-bottom: 1px solid #2a3f57;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #8f98a0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.tab-btn:hover { color: #c7d5e0; }
+.tab-btn.active { color: #66c0f4; border-bottom-color: #66c0f4; }
+
+/* ─── Filtros / busca ───────────────────────────────────────────────────── */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 16px;
+}
+.filters input[type="search"] {
+  flex: 1 1 240px;
+  min-width: 180px;
+  background: #0e1822;
+  border: 1px solid #2a3f57;
+  border-radius: 4px;
+  color: #c6d4df;
+  font-size: 0.9rem;
+  padding: 9px 12px;
+}
+.filters input[type="search"]:focus { outline: none; border-color: #66c0f4; }
+.filters select {
+  background: #0e1822;
+  border: 1px solid #2a3f57;
+  border-radius: 4px;
+  color: #c6d4df;
+  font-size: 0.88rem;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.filters select:focus { outline: none; border-color: #66c0f4; }
+.filters .f-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #9fb3c6;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.filters .f-check input { accent-color: #66c0f4; }
+.filters button.secondary {
+  background: #2a3f57;
+  color: #c6d4df;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+.filters button.secondary:hover { background: #35506e; }
+
+/* ─── Aba Grátis ────────────────────────────────────────────────────────── */
+.free-intro {
+  font-size: 0.86rem;
+  color: #8f98a0;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+.free-intro b { color: #c7d5e0; }
+.free-h2 {
+  font-size: 1.05rem;
+  color: #c7d5e0;
+  margin: 22px 0 12px;
+  font-weight: 700;
+}
+.free-h2 .free-n {
+  font-size: 0.78rem;
+  color: #0a1622;
+  background: #66c0f4;
+  border-radius: 10px;
+  padding: 1px 9px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.free-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.free-card {
+  background: #16202d;
+  border: 1px solid #2a3f57;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.free-card.current { border-color: #4fd06a55; }
+.free-cover {
+  display: block;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #0e1822;
+}
+.free-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.free-noimg {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.4rem; opacity: 0.4;
+}
+.plat-badge {
+  position: absolute;
+  top: 8px; left: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+  background: #2a2a2a;
+}
+.plat-epic { background: #2a2a2a; }
+.plat-psn  { background: #0070d1; }
+.plat-prime { background: #00a8e1; }
+.plat-gog  { background: #7b3fb5; }
+.free-body {
+  padding: 12px 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 auto;
+}
+.free-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #e6edf3;
+  line-height: 1.25;
+}
+.free-sub { font-size: 0.78rem; color: #8f98a0; }
+.free-orig { text-decoration: line-through; opacity: 0.8; margin-left: 4px; }
+.free-meta { font-size: 0.8rem; color: #9fb3c6; margin-bottom: 4px; }
+.free-card.current .free-meta { color: #4fd06a; font-weight: 600; }
+.free-btn {
+  margin-top: auto;
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  background: #66c0f4;
+  color: #0a1622;
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 9px 12px;
+  border-radius: 5px;
+}
+.free-btn:hover { background: #8fd1ff; }
+.free-btn.soon { background: #2a3f57; color: #c6d4df; }
+.free-btn.soon:hover { background: #35506e; }
+#free-loading { padding: 30px 10px; color: #8f98a0; }
+
+@media (max-width: 560px) {
+  .free-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .filters input[type="search"] { flex: 1 1 100%; }
+}

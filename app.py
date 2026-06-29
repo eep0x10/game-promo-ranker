@@ -35,6 +35,10 @@ STATIC_DIR  = os.path.join(BASE_DIR, "static")
 DATA_FILE   = os.environ.get(
     "DATA_FILE", os.path.join(BASE_DIR, "data", "games.json")
 )
+# JSON de jogos grátis (Epic), gerado por free_games.py no cron.
+FREE_FILE   = os.environ.get(
+    "FREE_FILE", os.path.join(BASE_DIR, "data", "free_games.json")
+)
 HTTP_TIMEOUT = 10  # segundos — todos os fetches externos
 
 # Headers de browser (a Steam bloqueia/limita user-agents "robôs").
@@ -81,6 +85,21 @@ def api_games():
     directory = os.path.dirname(DATA_FILE) or "."
     filename  = os.path.basename(DATA_FILE)
     return send_from_directory(directory, filename, mimetype="application/json")
+
+# ─── /api/free-games ──────────────────────────────────────────────────────────
+
+@app.route("/api/free-games")
+def api_free_games():
+    """JSON de jogos grátis (Epic): current/upcoming/history. 503 se ainda vazio."""
+    if not os.path.exists(FREE_FILE):
+        return jsonify({
+            "ok": False,
+            "error": "jogos gratis ainda nao coletados — rode o cron (free_games.py)",
+            "current": [], "upcoming": [], "history": [],
+        }), 503
+    directory = os.path.dirname(FREE_FILE) or "."
+    return send_from_directory(directory, os.path.basename(FREE_FILE),
+                               mimetype="application/json")
 
 # ─── /api/steam-user ──────────────────────────────────────────────────────────
 

@@ -11,6 +11,14 @@
   <h1>Steam Sale Ranker</h1>
   <div class="subtitle" id="subtitle">Carregando…</div>
 
+  <!-- ─── Abas ───────────────────────────────────────────────────────────── -->
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="deals">🏷️ Promoções Steam</button>
+    <button class="tab-btn" data-tab="free">🎁 Grátis</button>
+  </nav>
+
+  <!-- ═══ ABA: Promoções Steam ═══════════════════════════════════════════ -->
+  <section id="tab-deals">
   <div class="formula">
     score 0–10 = qualidade(Wilson das reviews) × fama(log de reviews) × bônus de desconto
   </div>
@@ -59,6 +67,33 @@
     </div>
   </div>
 
+  <!-- ─── Filtros / busca ───────────────────────────────────────────────── -->
+  <div class="filters">
+    <input type="search" id="f-search" placeholder="🔎 Buscar por nome…" autocomplete="off">
+    <select id="f-discount" title="Desconto mínimo">
+      <option value="0">Qualquer desconto</option>
+      <option value="25">≥ 25% off</option>
+      <option value="50">≥ 50% off</option>
+      <option value="75">≥ 75% off</option>
+      <option value="90">≥ 90% off</option>
+    </select>
+    <select id="f-review" title="Avaliação mínima">
+      <option value="0">Qualquer avaliação</option>
+      <option value="70">≥ 70% positivas</option>
+      <option value="80">≥ 80% positivas</option>
+      <option value="90">≥ 90% positivas</option>
+    </select>
+    <select id="f-sort" title="Ordenar por">
+      <option value="score">Ordenar: Score</option>
+      <option value="discount">Maior desconto</option>
+      <option value="reviews">Mais reviews</option>
+      <option value="pct">Melhor avaliação</option>
+      <option value="price">Menor preço</option>
+    </select>
+    <label class="f-check"><input type="checkbox" id="f-hist"> Só baixa histórica</label>
+    <button id="f-clear" class="secondary hidden">Limpar filtros</button>
+  </div>
+
   <!-- ─── Legenda de cores ──────────────────────────────────────────────── -->
   <div class="legend">
     <span><span class="sw new"></span> <b>NEW</b> — entrou em promoção hoje (vs. ontem)</span>
@@ -69,6 +104,19 @@
   <div id="loading">Carregando promoções…</div>
   <div id="error-box" class="hidden"></div>
   <div id="games-root"></div>
+  </section>
+
+  <!-- ═══ ABA: Grátis (Epic) ═════════════════════════════════════════════ -->
+  <section id="tab-free" class="hidden">
+    <div class="subtitle" id="free-subtitle"></div>
+    <div class="free-intro">
+      Jogos <b>grátis pra resgatar e ficar pra sempre</b> na Epic Games Store
+      (atualizado 1×/dia). PSN e Prime ficam de fora por ora — não há fonte
+      pública estável. O <b>histórico</b> guarda o que já passou.
+    </div>
+    <div id="free-loading">Carregando jogos grátis…</div>
+    <div id="free-root"></div>
+  </section>
 
   <footer>
     Score 0–10 = <b>qualidade</b> × <b>fama</b> × <b>bônus de desconto</b>.<br>
