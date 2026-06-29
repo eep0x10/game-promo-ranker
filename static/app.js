@@ -37,7 +37,7 @@ function setStatus(msg, cls) {
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-function gameRow(g, rank, color) {
+function gameRow(g, rank, color, isTail) {
   const appid = String(g.appid || "");
   const owned = COMPARE_ACTIVE && OWNED.has(Number(appid));
   if (owned) return ""; // já possui → some da listagem
@@ -47,6 +47,7 @@ function gameRow(g, rank, color) {
   const isLow = !!g.historical_low;
 
   const classes = [];
+  if (isTail) classes.push("tail-row"); // score < CUTOFF → escondida até "Ver mais"
   if (isNew) classes.push("new-row");
   if (isLow) classes.push("hist-low");
   if (wished) classes.push("wishlisted"); // azul vence (vem por último no CSS)
@@ -82,37 +83,52 @@ function gameRow(g, rank, color) {
     </tr>`;
 }
 
-// Renderiza um bloco aplicando um filtro de faixa de score (ou só-wishlist).
-//   opts.mode: "top"  → só score ≥ SCORE_CUTOFF
-//              "tail" → só score < SCORE_CUTOFF
-//              "wishlist" → só jogos da wishlist (qualquer score)
-// O rank é a posição por score no bloco inteiro (estável entre as faixas).
+// Renderiza UM bloco (Very Positive, etc.) já com as duas faixas juntas:
+//   - score ≥ CUTOFF  → linhas visíveis
+//   - score < CUTOFF  → linhas `tail-row` escondidas, reveladas por um botão
+//     "Ver mais" NO FIM DAQUELE bloco (tfoot).
+// opts.mode === "wishlist" → só jogos da wishlist (qualquer score, sem split).
+// Rank = posição por score no bloco inteiro (estável, não depende do filtro).
 function blockHtml(block, opts) {
   const color = block.color || "#888";
-  const mode = (opts && opts.mode) || "top";
-  let rows = "";
+  const wishlistOnly = opts && opts.mode === "wishlist";
+  let topRows = "", tailRows = "";
+  let topCount = 0, tailCount = 0;
   let rank = 0;
-  let visible = 0;
   for (const g of block.games) {
-    rank += 1; // posição por score no bloco completo (não depende do filtro)
-    const sc = Number(g.score);
-    if (mode === "wishlist") {
+    rank += 1;
+    if (wishlistOnly) {
       if (!WISHLIST.has(Number(g.appid))) continue;
-    } else if (mode === "top") {
-      if (sc < SCORE_CUTOFF) continue;
-    } else { // tail
-      if (sc >= SCORE_CUTOFF) continue;
+      const r = gameRow(g, rank, color, false);
+      if (r) { topRows += r; topCount += 1; }
+      continue;
     }
-    const r = gameRow(g, rank, color);
-    if (r) { rows += r; visible += 1; }
+    const isTail = Number(g.score) < SCORE_CUTOFF;
+    const r = gameRow(g, rank, color, isTail);
+    if (!r) continue;
+    if (isTail) { tailRows += r; tailCount += 1; }
+    else        { topRows  += r; topCount  += 1; }
   }
-  if (visible === 0) return { html: "", count: 0 };
+
+  const total = topCount + tailCount;
+  if (total === 0) return { html: "", count: 0 };
+
+  // Bloco começa colapsado (tail escondida) quando há jogos abaixo do corte.
+  const collapsed = tailCount > 0 ? " tail-collapsed" : "";
+  const tfoot = tailCount > 0 ? `
+        <tfoot>
+          <tr class="tail-toggle-row"><td colspan="9">
+            <button class="tail-toggle block-tail-toggle" data-count="${tailCount}" aria-expanded="false">
+              ▸ Ver mais ${tailCount} jogos (score abaixo de ${SCORE_CUTOFF})
+            </button>
+          </td></tr>
+        </tfoot>` : "";
 
   const html = `
-    <div class="block">
+    <div class="block${collapsed}">
       <div class="block-header" style="background:${color}">
         <span class="block-name">${escapeHtml(block.name)}</span>
-        <span class="block-count">${visible} jogos</span>
+        <span class="block-count">${total} jogos</span>
       </div>
       <table>
         <thead>
@@ -128,11 +144,11 @@ function blockHtml(block, opts) {
             <th>Score ▼</th>
           </tr>
         </thead>
-        <tbody>${rows}
-        </tbody>
+        <tbody>${topRows}${tailRows}
+        </tbody>${tfoot}
       </table>
     </div>`;
-  return { html, count: visible };
+  return { html, count: total };
 }
 
 function renderGames() {
@@ -140,8 +156,7 @@ function renderGames() {
   const root = el("games-root");
   const blocks = PAYLOAD.blocks || [];
 
-  // Modo "ver apenas wishlist": mostra todos os jogos da wishlist em promoção,
-  // sem corte de score (o usuário quer ver a wishlist inteira).
+  // Modo "ver apenas wishlist": todos os jogos da wishlist em promoção, sem corte.
   if (COMPARE_ACTIVE && WISHLIST_ONLY) {
     let html = "";
     for (const block of blocks) html += blockHtml(block, { mode: "wishlist" }).html;
@@ -150,38 +165,23 @@ function renderGames() {
     return;
   }
 
-  // Modo normal: score 6–10 visível + faixa abaixo de 6 num "Ver mais".
-  let topHtml = "";
-  let tailHtml = "";
-  let tailCount = 0;
-  for (const block of blocks) {
-    topHtml += blockHtml(block, { mode: "top" }).html;
-    const t = blockHtml(block, { mode: "tail" });
-    tailHtml += t.html;
-    tailCount += t.count;
-  }
+  // Modo normal: cada bloco mostra score CUTOFF–10 + um "Ver mais" próprio
+  // ao fim revelando os jogos abaixo do corte daquele bloco.
+  let html = "";
+  for (const block of blocks) html += blockHtml(block, { mode: "normal" }).html;
+  root.innerHTML = html || '<div class="empty-tier">Nenhum jogo a exibir.</div>';
 
-  let html = topHtml ||
-    `<div class="empty-tier">Nenhum jogo com score ${SCORE_CUTOFF}–10 hoje.</div>`;
-  if (tailHtml) {
-    html += `
-      <div class="tail-toggle-wrap">
-        <button id="tail-toggle" class="tail-toggle" data-count="${tailCount}" aria-expanded="false">
-          ▸ Ver mais ${tailCount} jogos (score abaixo de ${SCORE_CUTOFF})
-        </button>
-      </div>
-      <div id="tail-section" class="tail-hidden">${tailHtml}</div>`;
-  }
-  root.innerHTML = html;
-  const tt = el("tail-toggle");
-  if (tt) tt.addEventListener("click", toggleTail);
+  root.querySelectorAll(".block-tail-toggle").forEach((btn) => {
+    btn.addEventListener("click", toggleBlockTail);
+  });
 }
 
-function toggleTail() {
-  const sec = el("tail-section");
-  const btn = el("tail-toggle");
-  if (!sec || !btn) return;
-  const opened = sec.classList.toggle("tail-hidden") === false;
+// Expande/colapsa as linhas score < CUTOFF DO BLOCO clicado.
+function toggleBlockTail(e) {
+  const btn = e.currentTarget;
+  const block = btn.closest(".block");
+  if (!block) return;
+  const opened = block.classList.toggle("tail-collapsed") === false;
   btn.setAttribute("aria-expanded", String(opened));
   const n = btn.dataset.count || "";
   btn.textContent = opened

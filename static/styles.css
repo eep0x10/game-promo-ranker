@@ -263,20 +263,22 @@ footer {
 }
 .profile-search button.secondary.active:hover { background: #3380c9; }
 
-/* Faixa de score < 6 colapsada + botão "Ver mais" */
-.tail-hidden { display: none; }
-.tail-toggle-wrap { text-align: center; margin: 20px 0 8px; }
+/* Faixa de score < CUTOFF: escondida até o "Ver mais" DO PRÓPRIO bloco */
+.block.tail-collapsed tbody tr.tail-row { display: none; }
+.tail-toggle-row td { padding: 0; background: #0e1822; }
 .tail-toggle {
+  width: 100%;
+  display: block;
   background: #16202d;
   color: #9fb3c6;
-  border: 1px solid #2a3f57;
-  border-radius: 6px;
+  border: none;
+  border-top: 1px solid #2a3f57;
   padding: 11px 22px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
 }
-.tail-toggle:hover { background: #1d2b3c; color: #c7d5e0; border-color: #66c0f4; }
+.tail-toggle:hover { background: #1d2b3c; color: #c7d5e0; }
 
 .empty-tier {
   padding: 30px 10px;
