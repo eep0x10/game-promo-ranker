@@ -165,12 +165,16 @@ async function compareProfile() {
   const raw = el("profile-input").value.trim();
   if (!raw) { setStatus("Digite seu perfil Steam primeiro.", "err"); return; }
 
+  const keyInput = el("apikey-input");
+  const apiKey = keyInput ? keyInput.value.trim() : "";
+
   const btn = el("profile-btn");
   btn.disabled = true;
-  setStatus("Buscando wishlist e biblioteca…", "info");
+  setStatus(apiKey ? "Buscando wishlist e biblioteca…" : "Buscando wishlist…", "info");
 
   try {
-    const url = "/api/steam-user?profile=" + encodeURIComponent(raw);
+    let url = "/api/steam-user?profile=" + encodeURIComponent(raw);
+    if (apiKey) url += "&key=" + encodeURIComponent(apiKey);
     const r = await fetch(url, { cache: "no-store" });
     const data = await r.json();
 
@@ -191,9 +195,10 @@ async function compareProfile() {
     renderGames();
     el("clear-btn").classList.remove("hidden");
 
-    let msg =
-      `Wishlist: ${WISHLIST.size} jogos (grifados em azul) · ` +
-      `Biblioteca: ${OWNED.size} jogos (ocultados da lista).`;
+    let msg = `Wishlist: ${WISHLIST.size} jogos (grifados em azul)`;
+    msg += OWNED.size
+      ? ` · Biblioteca: ${OWNED.size} jogos (ocultados da lista).`
+      : ".";
     let cls = "ok";
     if (data.warnings && data.warnings.length) {
       msg += "  Aviso: " + data.warnings.join("; ");
@@ -201,8 +206,8 @@ async function compareProfile() {
     }
     if (WISHLIST.size === 0 && OWNED.size === 0) {
       msg =
-        "Nenhum dado público encontrado. Deixe perfil, detalhes de jogo e " +
-        "wishlist públicos na Steam.";
+        "Wishlist pública vazia (ou ainda privada). Deixe a lista de desejos " +
+        "como Pública em Perfil → Editar perfil → Privacidade.";
       cls = "warn";
     }
     setStatus(msg, cls);

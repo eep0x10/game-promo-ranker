@@ -88,6 +88,7 @@ def api_games():
 _RE_ID       = re.compile(r"steamcommunity\.com/id/([^/?#]+)", re.IGNORECASE)
 _RE_PROFILES = re.compile(r"steamcommunity\.com/profiles/(\d+)", re.IGNORECASE)
 _RE_STEAMID  = re.compile(r"^\d{17}$")
+_RE_APIKEY   = re.compile(r"^[0-9A-Fa-f]{32}$")
 
 
 def _parse_profile(raw: str):
@@ -120,118 +121,123 @@ def _parse_profile(raw: str):
     return None, None
 
 
-def _fetch_wishlist(kind: str, value: str):
+def _resolve_steamid64(kind: str, value: str):
     """
-    Busca a wishlist pública paginando ?p=0,1,2...
-    O endpoint devolve um dict {appid: {...}} por página, ou [] quando acaba.
-    Retorna (appids:list[int]|None, fatal_error:str|None).
-      - lista (possivelmente vazia) em sucesso
-      - None + erro quando a wishlist é privada / perfil inexistente
+    Devolve (steamid64:str|None, erro:str|None).
+      - kind=='profiles' → value já é o steamID64.
+      - kind=='id'       → resolve o vanity via id/<vanity>/?xml=1 → <steamID64>.
+    Os endpoints atuais da Steam (wishlist/owned) exigem o steamID64 numérico;
+    o XML do perfil é o único caminho público p/ resolver um vanity sem API key.
     """
-    base = f"https://store.steampowered.com/wishlist/{kind}/{value}/wishlistdata/"
+    if kind == "profiles":
+        return value, None
+    try:
+        r = requests.get(
+            f"https://steamcommunity.com/id/{value}/",
+            params={"xml": 1}, headers=BROWSER_HEADERS, timeout=HTTP_TIMEOUT,
+        )
+    except requests.RequestException:
+        return None, "falha de rede ao resolver o perfil"
+    if r.status_code != 200:
+        return None, "perfil nao encontrado"
+    try:
+        root = ET.fromstring(r.content)
+    except ET.ParseError:
+        return None, "perfil nao encontrado"
+    # <response><error>The specified profile could not be found.</error></response>
+    err = root.find("error")
+    if err is not None and (err.text or "").strip():
+        return None, "perfil nao encontrado (confira o nome/URL)"
+    sid = root.find("steamID64")
+    if sid is not None and (sid.text or "").strip().isdigit():
+        return sid.text.strip(), None
+    return None, "nao foi possivel resolver o steamID64 do perfil"
+
+
+def _fetch_wishlist(steamid64: str):
+    """
+    Wishlist pública via IWishlistService/GetWishlist/v1 (SEM API key — endpoint
+    atual; o antigo store.../wishlistdata foi descontinuado pela Steam em 2024).
+    Retorna (appids:list[int]|None, erro:str|None). None = privada/indisponível.
+    """
+    try:
+        r = requests.get(
+            "https://api.steampowered.com/IWishlistService/GetWishlist/v1/",
+            params={"steamid": steamid64},
+            headers=BROWSER_HEADERS, timeout=HTTP_TIMEOUT,
+        )
+    except requests.RequestException:
+        return None, "falha de rede ao buscar a wishlist"
+    if r.status_code != 200:
+        return None, "wishlist privada (deixe a lista de desejos publica na Steam)"
+    try:
+        data = r.json()
+    except ValueError:
+        return None, "resposta invalida da wishlist"
+    items = (data.get("response") or {}).get("items")
+    if items is None:
+        # response == {} → wishlist privada (ou inexistente)
+        return None, "wishlist privada (deixe a lista de desejos publica na Steam)"
     appids: list[int] = []
-    page = 0
-    MAX_PAGES = 50  # ~5000 itens; trava de segurança contra loop infinito
-    saw_any = False
-
-    while page < MAX_PAGES:
-        try:
-            r = requests.get(
-                base, params={"p": page},
-                headers=BROWSER_HEADERS, timeout=HTTP_TIMEOUT,
-            )
-        except requests.RequestException:
-            # erro de rede na 1a página = fatal; nas seguintes, devolve o que tem
-            if page == 0:
-                return None, "falha de rede ao buscar a wishlist"
-            break
-
-        # 500/404 etc. — privado ou inexistente (só fatal se for logo na 1a página)
-        if r.status_code != 200:
-            if page == 0:
-                return None, "wishlist privada ou perfil nao encontrado"
-            break
-
-        # A Steam responde 200 com corpo vazio/`{"success":2}`/lista vazia quando
-        # a wishlist é privada ou acabou a paginação.
-        try:
-            data = r.json()
-        except ValueError:
-            if page == 0:
-                return None, "wishlist privada (sem dados publicos)"
-            break
-
-        if isinstance(data, dict):
-            if "success" in data and not any(k.isdigit() for k in data.keys()):
-                # {"success": 2} → privada (só fatal se nunca vimos nada)
-                if not saw_any:
-                    return None, "wishlist privada (ative 'wishlist publica' na Steam)"
-                break
-            keys = [k for k in data.keys() if str(k).isdigit()]
-            if not keys:
-                break
-            for k in keys:
-                try:
-                    appids.append(int(k))
-                except (TypeError, ValueError):
-                    pass
-            saw_any = True
-            page += 1
-            continue
-
-        # lista vazia [] = fim da paginação
-        break
-
+    for it in items:
+        ap = it.get("appid")
+        if isinstance(ap, int):
+            appids.append(ap)
+        elif str(ap).isdigit():
+            appids.append(int(ap))
     return appids, None
 
 
-def _fetch_owned(kind: str, value: str):
+def _fetch_owned(steamid64: str, api_key: str):
     """
-    Busca os jogos do perfil via .../games?tab=all&xml=1 (XML público).
-    Retorna (appids:list[int]|None, fatal_error:str|None).
-    Perfil privado → o XML traz <privacyState>private</privacyState> sem <games>.
+    Biblioteca via IPlayerService/GetOwnedGames — REQUER API key. A Steam fechou
+    o acesso anônimo à biblioteca em 2024 (games?xml=1 redireciona p/ /login), e
+    GetOwnedGames sem key responde 401. Sem key → aviso não-fatal (não erro).
+    Retorna (appids:list[int]|None, aviso/erro:str|None).
     """
-    url = f"https://steamcommunity.com/{kind}/{value}/games"
+    if not api_key:
+        return None, ("remover jogos que voce ja tem precisa de uma API key "
+                      "opcional — a Steam fechou o acesso anonimo a biblioteca")
     try:
         r = requests.get(
-            url, params={"tab": "all", "xml": 1},
+            "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/",
+            params={
+                "key": api_key, "steamid": steamid64,
+                "include_appinfo": 0, "include_played_free_games": 1,
+                "format": "json",
+            },
             headers=BROWSER_HEADERS, timeout=HTTP_TIMEOUT,
         )
     except requests.RequestException:
         return None, "falha de rede ao buscar a biblioteca"
-
+    if r.status_code in (401, 403):
+        return None, "API key invalida (a comparacao de wishlist segue funcionando)"
     if r.status_code != 200:
-        return None, "perfil nao encontrado"
-
+        return None, "biblioteca indisponivel no momento"
     try:
-        root = ET.fromstring(r.content)
-    except ET.ParseError:
-        return None, "resposta invalida do perfil"
-
-    # <response><error>...</error></response> → vanity/id inexistente
-    err = root.find("error")
-    if err is not None and (err.text or "").strip():
-        return None, "perfil nao encontrado"
-
-    privacy = root.find("privacyState")
-    games_el = root.find("games")
-    if games_el is None:
-        if privacy is not None and (privacy.text or "").strip().lower() != "public":
-            return None, "detalhes de jogos privados (deixe 'Detalhes do jogo: Publico')"
-        # público mas sem jogos listados
-        return [], None
-
+        data = r.json()
+    except ValueError:
+        return None, "resposta invalida da biblioteca"
+    games = (data.get("response") or {}).get("games")
+    if games is None:
+        return None, "detalhes de jogo privados (deixe 'Detalhes do jogo: Publico')"
     appids: list[int] = []
-    for game in games_el.findall("game"):
-        ap = game.find("appID")
-        if ap is not None and (ap.text or "").strip().isdigit():
-            appids.append(int(ap.text.strip()))
+    for g in games:
+        ap = g.get("appid")
+        if isinstance(ap, int):
+            appids.append(ap)
+        elif str(ap).isdigit():
+            appids.append(int(ap))
     return appids, None
 
 
 @app.route("/api/steam-user")
 def api_steam_user():
     profile_raw = request.args.get("profile", "")
+    api_key = (request.args.get("key", "") or "").strip()
+    if api_key and not _RE_APIKEY.match(api_key):
+        api_key = ""  # key malformada → ignora e segue só com a wishlist
+
     kind, value = _parse_profile(profile_raw)
     if not kind:
         return jsonify({
@@ -239,26 +245,25 @@ def api_steam_user():
             "error": "informe seu perfil, ex.: https://steamcommunity.com/id/seu_perfil",
         })
 
-    # Tentamos como informado; se for vanity (id) e falhar, ainda assim
-    # devolvemos erro amigável (não temos como adivinhar o steamid64 sem API key).
-    wishlist, w_err = _fetch_wishlist(kind, value)
-    owned,    o_err = _fetch_owned(kind, value)
+    # Endpoints atuais exigem o steamID64; resolvemos o vanity primeiro.
+    steamid64, sid_err = _resolve_steamid64(kind, value)
+    if not steamid64:
+        return jsonify({"ok": False, "error": sid_err or "perfil nao encontrado"})
 
-    # Se AMBOS falharam, é perfil privado/inexistente → erro único e amigável.
-    if wishlist is None and owned is None:
-        return jsonify({
-            "ok": False,
-            "error": o_err or w_err or "perfil privado ou nao encontrado",
-        })
+    # Wishlist é o recurso principal (sem key); owned é opcional (precisa key).
+    wishlist, w_err = _fetch_wishlist(steamid64)
+    owned,    o_err = _fetch_owned(steamid64, api_key)
+
+    if wishlist is None:
+        return jsonify({"ok": False, "error": w_err or "wishlist privada ou nao encontrada"})
 
     return jsonify({
         "ok": True,
-        "profile": {"kind": kind, "value": value},
+        "profile": {"steamid64": steamid64},
         "wishlist": sorted(set(wishlist or [])),
         "owned":    sorted(set(owned or [])),
-        # avisos não-fatais (ex.: wishlist privada mas biblioteca pública)
-        "warnings": [e for e in (w_err if wishlist is None else None,
-                                 o_err if owned is None else None) if e],
+        # aviso não-fatal quando a biblioteca não veio (sem key / privada)
+        "warnings": [o_err] if (owned is None and o_err) else [],
     })
 
 # ─── Healthcheck ──────────────────────────────────────────────────────────────

@@ -28,14 +28,33 @@
       <button id="clear-btn" class="secondary hidden">Limpar</button>
     </div>
     <div class="profile-status info" id="profile-status"></div>
+    <details class="apikey-box">
+      <summary>Opcional: também remover os jogos que eu já tenho (requer API key)</summary>
+      <input
+        type="text"
+        id="apikey-input"
+        placeholder="API key Steam (32 caracteres) — opcional"
+        autocomplete="off"
+        spellcheck="false"
+        maxlength="32">
+      <span class="apikey-hint">
+        Pegue a sua grátis em
+        <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener">steamcommunity.com/dev/apikey</a>.
+        Usada só nesta busca, nunca é salva no servidor. Sem ela, a wishlist
+        ainda é comparada normalmente.
+      </span>
+    </details>
     <div class="profile-help">
-      Para a comparação funcionar, seu perfil Steam precisa estar público.
-      Em <b>Perfil → Editar perfil → Privacidade</b>, deixe:
-      <b>Meu perfil: Público</b>, <b>Detalhes do jogo: Público</b> e marque a
-      <b>lista de desejos como pública</b>. Aceita a URL completa
-      (<code>steamcommunity.com/id/...</code> ou <code>/profiles/...</code>) ou só o seu
-      nome personalizado. Jogos na sua <b>wishlist</b> ficam grifados em
-      <b>azul</b>; jogos que você <b>já possui</b> são removidos da lista.
+      A <b>comparação de wishlist funciona sem API key</b> — basta deixar a sua
+      <b>lista de desejos pública</b> (<b>Perfil → Editar perfil → Privacidade →
+      Lista de desejos: Público</b>). Aceita a URL completa
+      (<code>steamcommunity.com/id/...</code> ou <code>/profiles/...</code>) ou só o
+      seu nome personalizado. Jogos na sua <b>wishlist</b> ficam grifados em
+      <b>azul</b>.
+      <br><br>
+      Para <b>remover os jogos que você já tem</b>, a Steam fechou o acesso anônimo
+      à biblioteca — então isso é <b>opcional</b> e precisa de uma <b>API key</b>
+      (campo acima). Sem a key, só o destaque da wishlist é aplicado.
     </div>
   </div>
 
@@ -53,7 +72,8 @@
   <footer>
     Fórmula: qualidade × fama × bônus de desconto.<br>
     O desconto pesa 50% do seu valor real para não suplantar qualidade e popularidade.<br>
-    Comparação de perfil feita com endpoints públicos da Steam (sem API key) —
+    Wishlist comparada via endpoint público da Steam (sem API key). Biblioteca
+    (jogos que você já tem) é opcional e usa uma API key só nesta requisição —
     nada é armazenado no servidor.
   </footer>
 
