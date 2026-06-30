@@ -376,10 +376,18 @@ import threading as _threading
 _cs_lock       = _threading.Lock()
 _cs_last_call  = [0.0]
 _CS_INTERVAL   = 0.5    # 2 req/s — seguro para uso diário
+# CheapShark bloqueia o IP em rajada grande. Por isso semeamos um LOTE pequeno por
+# execução (o cron diário enche aos poucos), com backoff curto e um circuit breaker
+# que desliga o resto do lote quando detecta bloqueio (evita travar o cron).
+SEED_BATCH     = 120
+_cs_blocked    = [False]   # circuit breaker do run atual
+_cs_streak     = [0]       # 429 consecutivos
 
 
 def _cs_get(path: str, params: dict, _retry: int = 1) -> any:
-    """GET ao CheapShark com rate limiting global e retry em 429."""
+    """GET ao CheapShark com rate limiting, backoff curto e circuit breaker."""
+    if _cs_blocked[0]:           # bloqueio já detectado neste run → não insiste
+        return None
     with _cs_lock:
         gap = _CS_INTERVAL - (time.time() - _cs_last_call[0])
         if gap > 0:
@@ -391,11 +399,17 @@ def _cs_get(path: str, params: dict, _retry: int = 1) -> any:
             params=params, timeout=10,
         )
         if r.status_code == 429:
-            if _retry > 0:
-                time.sleep(45)   # backoff longo antes de retry
+            _cs_streak[0] += 1
+            if _cs_streak[0] >= 12:          # IP bloqueado → desliga o resto do lote
+                _cs_blocked[0] = True
+            if _retry > 0 and not _cs_blocked[0]:
+                time.sleep(8)                # backoff curto
                 return _cs_get(path, params, _retry=_retry - 1)
             return None
-        return r.json() if r.status_code == 200 else None
+        if r.status_code == 200:
+            _cs_streak[0] = 0                 # sucesso reseta a sequência de 429
+            return r.json()
+        return None
     except Exception:
         return None
 
@@ -539,9 +553,11 @@ def seed_low_cache(games: list[dict], cache_path: str) -> None:
     if not needs:
         print("  Baixa histórica: cache cobre todos os jogos (0 chamadas externas).")
         return
+    total = len(needs)
+    needs = needs[:SEED_BATCH]           # lote pequeno → não toma block do CheapShark
     n = len(needs)
-    print(f"  Baixa histórica: verificando {n} jogos no CheapShark "
-          f"(~{n*2*_CS_INTERVAL:.0f}s); o resto já está verificado no cache...")
+    print(f"  Baixa histórica: verificando {n}/{total} jogos no CheapShark "
+          f"(lote diário; o resto vem nas próximas execuções)...")
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(_check_one_low, g): g for g in needs}
         done = 0
