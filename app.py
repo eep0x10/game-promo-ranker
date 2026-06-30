@@ -35,9 +35,13 @@ STATIC_DIR  = os.path.join(BASE_DIR, "static")
 DATA_FILE   = os.environ.get(
     "DATA_FILE", os.path.join(BASE_DIR, "data", "games.json")
 )
-# JSON de jogos grátis (Epic), gerado por free_games.py no cron.
+# JSON de jogos grátis (Epic + PSN), gerado por free_games.py no cron.
 FREE_FILE   = os.environ.get(
     "FREE_FILE", os.path.join(BASE_DIR, "data", "free_games.json")
+)
+# JSON de promoções da Epic (com comparação vs Steam), gerado por epic_deals.py.
+EPIC_FILE   = os.environ.get(
+    "EPIC_FILE", os.path.join(BASE_DIR, "data", "epic_games.json")
 )
 HTTP_TIMEOUT = 10  # segundos — todos os fetches externos
 
@@ -99,6 +103,21 @@ def api_free_games():
         }), 503
     directory = os.path.dirname(FREE_FILE) or "."
     return send_from_directory(directory, os.path.basename(FREE_FILE),
+                               mimetype="application/json")
+
+# ─── /api/epic-games ──────────────────────────────────────────────────────────
+
+@app.route("/api/epic-games")
+def api_epic_games():
+    """JSON de promoções da Epic (com comparação cross-store vs Steam). 503 se vazio."""
+    if not os.path.exists(EPIC_FILE):
+        return jsonify({
+            "ok": False,
+            "error": "promocoes Epic ainda nao coletadas — rode o cron (epic_deals.py)",
+            "games": [],
+        }), 503
+    directory = os.path.dirname(EPIC_FILE) or "."
+    return send_from_directory(directory, os.path.basename(EPIC_FILE),
                                mimetype="application/json")
 
 # ─── /api/steam-user ──────────────────────────────────────────────────────────

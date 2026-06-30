@@ -14,6 +14,7 @@
   <!-- ─── Abas ───────────────────────────────────────────────────────────── -->
   <nav class="tabs">
     <button class="tab-btn active" data-tab="deals">🏷️ Promoções Steam</button>
+    <button class="tab-btn" data-tab="epic">🛒 Promoções Epic</button>
     <button class="tab-btn" data-tab="free">🎁 Grátis</button>
   </nav>
 
@@ -108,13 +109,37 @@
   <div id="games-root"></div>
   </section>
 
-  <!-- ═══ ABA: Grátis (Epic) ═════════════════════════════════════════════ -->
+  <!-- ═══ ABA: Promoções Epic ════════════════════════════════════════════ -->
+  <section id="tab-epic" class="hidden">
+    <div class="subtitle" id="epic-subtitle"></div>
+    <div class="free-intro">
+      Jogos <b>em promoção na Epic Games Store</b> (atualizado 1×/dia). A Epic não
+      expõe avaliações como a Steam, então a lista é ordenada por desconto. Quando
+      o jogo <b>também está em promoção na Steam</b>, o <b>preço da Steam aparece ao
+      lado</b> — e se a Epic estiver <b>mais barata</b>, ele é destacado e sobe pro topo.
+    </div>
+    <div class="filters">
+      <input type="search" id="epic-search" placeholder="🔎 Buscar por nome…" autocomplete="off">
+      <select id="epic-sort" title="Ordenar por">
+        <option value="best">Ordenar: Melhores</option>
+        <option value="discount">Maior desconto</option>
+        <option value="price">Menor preço</option>
+      </select>
+      <button type="button" class="legend-item" id="epic-cheaper-toggle" data-tag="cheaper">
+        <span class="sw cheaper"></span> <b>Só mais baratos que a Steam</b></button>
+    </div>
+    <div id="epic-loading">Carregando promoções da Epic…</div>
+    <div id="epic-root"></div>
+  </section>
+
+  <!-- ═══ ABA: Grátis (Epic + PSN) ═══════════════════════════════════════ -->
   <section id="tab-free" class="hidden">
     <div class="subtitle" id="free-subtitle"></div>
     <div class="free-intro">
-      Jogos <b>grátis pra resgatar e ficar pra sempre</b> na Epic Games Store
-      (atualizado 1×/dia). PSN e Prime ficam de fora por ora — não há fonte
-      pública estável. O <b>histórico</b> guarda o que já passou.
+      Jogos <b>grátis</b> na <b>Epic</b> (resgatar e ficar pra sempre) e os
+      <b>jogos mensais do PS Plus</b> (atualizado 1×/dia). O selo na capa indica a
+      plataforma. <b>Em breve</b> mostra os próximos (inclui o próximo mês do PS
+      Plus assim que a Sony anuncia). O <b>histórico</b> guarda o que já passou.
     </div>
     <div id="free-loading">Carregando jogos grátis…</div>
     <div id="free-root"></div>

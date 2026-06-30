@@ -265,6 +265,24 @@ tr.wishlisted:hover { background: #173a52 !important; }
 .new-badge  { background: #4fd06a; color: #04210b; }
 .wish-badge { background: #66c0f4; color: #0a1622; }
 
+/* ─── Aba Promoções Epic ─────────────────────────────────────────────── */
+.cheaper-badge, .onsteam-badge {
+  display: inline-block; margin-left: 7px; padding: 1px 5px; border-radius: 3px;
+  font-size: 0.68rem; font-weight: 700; vertical-align: middle; letter-spacing: 0.03em;
+}
+.cheaper-badge { background: #4fd06a; color: #04210b; }
+.onsteam-badge { background: #2a3f57; color: #aab8c6; font-weight: 600; }
+.legend .sw.cheaper, .sw.cheaper { background: #4fd06a; }
+/* linha de jogo mais barato que na Steam = verde (igual "novidade") */
+tr.cheaper-row { background: #14331c !important; border-left: 3px solid #4fd06a; }
+tr.cheaper-row:hover { background: #1a4024 !important; }
+td.low-ever .muted { color: #5a6675; }
+/* preço da Steam quando a Epic ganha: riscado + esmaecido, com o % de economia em verde */
+td.low-ever a { color: #8f98a0; text-decoration: none; }
+td.low-ever a:hover { color: #66c0f4; }
+td.low-ever a.steam-loses { color: #6b7682; text-decoration: line-through; }
+td.low-ever .save-pct { color: #4fd06a; font-weight: 700; text-decoration: none; margin-left: 3px; }
+
 footer {
   margin-top: 30px;
   color: #8f98a0;

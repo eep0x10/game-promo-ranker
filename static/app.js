@@ -15,6 +15,9 @@ let COMPARE_ACTIVE = false;
 let TAGS = { new: false, hist: false, wish: false };
 // Última resposta de /api/free-games (carregada sob demanda ao abrir a aba)
 let FREE_PAYLOAD = null;
+// Última resposta de /api/epic-games (carregada sob demanda ao abrir a aba)
+let EPIC_PAYLOAD = null;
+let EPIC_ONLY_CHEAPER = false;
 
 // Por padrão a lista mostra só score CUTOFF–10; o resto fica num "Ver mais".
 const SCORE_CUTOFF = 7.0;
@@ -310,8 +313,10 @@ function switchTab(tab) {
   document.querySelectorAll(".tab-btn").forEach((b) =>
     b.classList.toggle("active", b.dataset.tab === tab));
   el("tab-deals").classList.toggle("hidden", tab !== "deals");
+  el("tab-epic").classList.toggle("hidden", tab !== "epic");
   el("tab-free").classList.toggle("hidden", tab !== "free");
   if (tab === "free" && FREE_PAYLOAD === null) loadFreeGames();
+  if (tab === "epic" && EPIC_PAYLOAD === null) loadEpicGames();
 }
 
 function fmtDate(iso) {
@@ -391,6 +396,98 @@ async function loadFreeGames() {
     renderFree();
   } catch (e) {
     loading.textContent = "Falha ao carregar jogos grátis: " + e.message;
+  }
+}
+
+// ─── Promoções Epic ────────────────────────────────────────────────────────────
+
+function epicRow(g, rank) {
+  const cover = g.cover
+    ? `<img src="${escapeHtml(g.cover)}" alt="" loading="lazy">` : "";
+  const badges =
+    (g.cheaper_than_steam ? '<span class="cheaper-badge">MAIS BARATO QUE STEAM</span>' : "") +
+    (g.on_steam && !g.cheaper_than_steam ? '<span class="onsteam-badge">também na Steam</span>' : "");
+  // Coluna Steam: preço comparado (link p/ a página da Steam). Verde se a Epic ganha.
+  let steamCell = '<span class="muted">—</span>';
+  if (g.on_steam) {
+    const cls = g.cheaper_than_steam ? "steam-loses" : "";
+    const extra = g.cheaper_than_steam ? ` <span class="save-pct">−${g.steam_save_pct}%</span>` : "";
+    steamCell = `<a href="${escapeHtml(g.steam_url || "#")}" target="_blank" rel="noopener" class="${cls}">${escapeHtml(g.steam_price || "")}${extra}</a>`;
+  }
+  return `
+    <tr${g.cheaper_than_steam ? ' class="cheaper-row"' : ""}>
+      <td class="rank">${rank}</td>
+      <td class="name">
+        <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener">
+          ${cover}<span>${escapeHtml(g.title)}${badges}</span>
+        </a>
+      </td>
+      <td class="disc" style="color:#f5c518">-${g.discount}%</td>
+      <td class="orig">${escapeHtml(g.orig_price || "")}</td>
+      <td class="sale">${escapeHtml(g.sale_price || "")}</td>
+      <td class="low-ever">${steamCell}</td>
+    </tr>`;
+}
+
+function epicSort(arr, mode) {
+  const cmp = {
+    best:     (a, b) => (Number(b.cheaper_than_steam) - Number(a.cheaper_than_steam)) ||
+                        (Number(b.on_steam) - Number(a.on_steam)) ||
+                        (b.discount - a.discount) || (a.sale_brl - b.sale_brl),
+    discount: (a, b) => b.discount - a.discount,
+    price:    (a, b) => a.sale_brl - b.sale_brl,
+  }[mode] || ((a, b) => 0);
+  arr.sort(cmp);
+}
+
+function renderEpic() {
+  if (!EPIC_PAYLOAD) return;
+  el("epic-subtitle").textContent =
+    "Atualizado em " + (EPIC_PAYLOAD.generated_at_human || "—") +
+    "  —  " + (EPIC_PAYLOAD.total || 0) + " promoções" +
+    (EPIC_PAYLOAD.cheaper_than_steam
+      ? "  ·  " + EPIC_PAYLOAD.cheaper_than_steam + " mais baratas que na Steam" : "");
+
+  const q = ((el("epic-search") || {}).value || "").trim().toLowerCase();
+  const sort = ((el("epic-sort") || {}).value) || "best";
+  let games = (EPIC_PAYLOAD.games || []).slice();
+  if (EPIC_ONLY_CHEAPER) games = games.filter((g) => g.cheaper_than_steam);
+  if (q) games = games.filter((g) => String(g.title || "").toLowerCase().includes(q));
+  epicSort(games, sort);
+
+  let rows = "", rank = 0;
+  for (const g of games) rows += epicRow(g, ++rank);
+
+  el("epic-root").innerHTML = rows ? `
+    <div class="block">
+      <div class="block-header" style="background:#2a2a2a">
+        <span class="block-name">Promoções Epic</span>
+        <span class="block-count">${rank} jogos</span>
+      </div>
+      <div class="table-scroll"><table>
+        <thead><tr>
+          <th>#</th><th>Nome</th><th>Desconto</th>
+          <th>Preço Original</th><th>Preço Promo</th><th>Steam</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>` : '<div class="empty-tier">Nenhuma promoção com esse filtro.</div>';
+}
+
+async function loadEpicGames() {
+  const loading = el("epic-loading");
+  try {
+    const r = await fetch("/api/epic-games", { cache: "no-store" });
+    if (r.status === 503) {
+      loading.textContent = "As promoções da Epic ainda não foram coletadas (aguarde o cron diário).";
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    EPIC_PAYLOAD = await r.json();
+    loading.classList.add("hidden");
+    renderEpic();
+  } catch (e) {
+    loading.textContent = "Falha ao carregar promoções da Epic: " + e.message;
   }
 }
 
@@ -509,7 +606,7 @@ function toggleTag(tag) {
 
 // Sincroniza o visual: itens da legenda ativos + botão "ver apenas wishlist".
 function syncTagUI() {
-  document.querySelectorAll(".legend-item").forEach((node) => {
+  document.querySelectorAll(".legend .legend-item").forEach((node) => {
     node.classList.toggle("active", !!TAGS[node.dataset.tag]);
   });
   const wb = el("wishonly-btn");
@@ -545,8 +642,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (node) node.addEventListener(id === "f-search" ? "input" : "change", renderGames);
   });
   if (el("f-clear")) el("f-clear").addEventListener("click", clearFilters);
-  document.querySelectorAll(".legend-item").forEach((node) => {
+  document.querySelectorAll(".legend .legend-item").forEach((node) => {
     node.addEventListener("click", () => toggleTag(node.dataset.tag));
+  });
+
+  // Filtros da aba Promoções Epic
+  ["epic-search", "epic-sort"].forEach((id) => {
+    const node = el(id);
+    if (node) node.addEventListener(id === "epic-search" ? "input" : "change", renderEpic);
+  });
+  const epicToggle = el("epic-cheaper-toggle");
+  if (epicToggle) epicToggle.addEventListener("click", () => {
+    EPIC_ONLY_CHEAPER = !EPIC_ONLY_CHEAPER;
+    epicToggle.classList.toggle("active", EPIC_ONLY_CHEAPER);
+    renderEpic();
   });
 
   loadGames();

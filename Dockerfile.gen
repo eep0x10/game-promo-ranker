@@ -17,7 +17,7 @@ WORKDIR /app
 # Só o gerador precisa de requests + beautifulsoup4 (sem flask/gunicorn).
 RUN pip install --no-cache-dir "requests>=2.31" "beautifulsoup4>=4.12"
 
-COPY steam_sale_ranker.py free_games.py ./
+COPY steam_sale_ranker.py free_games.py epic_deals.py ./
 RUN mkdir -p /app/data
 
 # Default: gera as promoções da Steam. Para os jogos grátis (Epic), rode com
