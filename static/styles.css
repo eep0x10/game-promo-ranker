@@ -283,6 +283,32 @@ td.low-ever a:hover { color: #66c0f4; }
 td.low-ever a.steam-loses { color: #6b7682; text-decoration: line-through; }
 td.low-ever .save-pct { color: #4fd06a; font-weight: 700; text-decoration: none; margin-left: 3px; }
 
+/* ─── Aba Game Pass ──────────────────────────────────────────────────── */
+.gp-search {
+  width: 100%; max-width: 420px; margin: 6px 0 18px; padding: 9px 12px;
+  background: #16202d; border: 1px solid #2a3f57; border-radius: 8px;
+  color: #c6d4df; font-size: 0.9rem;
+}
+.gp-grid {
+  display: grid; gap: 12px; margin-bottom: 26px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.gp-card {
+  display: flex; flex-direction: column; background: #16202d;
+  border: 1px solid #243246; border-radius: 8px; overflow: hidden;
+  text-decoration: none; color: #c6d4df; transition: border-color .15s, transform .15s;
+}
+.gp-card:hover { border-color: #66c0f4; transform: translateY(-2px); }
+.gp-cover { aspect-ratio: 16 / 9; background: #0e1822; }
+.gp-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gp-title {
+  font-size: 0.82rem; font-weight: 600; padding: 7px 9px 2px; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.gp-dev { font-size: 0.72rem; color: #8f98a0; padding: 0 9px 8px; }
+.free-h2.gp-in  { border-left: 3px solid #4fd06a; padding-left: 9px; }
+.free-h2.gp-out { border-left: 3px solid #f06c6c; padding-left: 9px; }
+
 footer {
   margin-top: 30px;
   color: #8f98a0;

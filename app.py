@@ -43,6 +43,10 @@ FREE_FILE   = os.environ.get(
 EPIC_FILE   = os.environ.get(
     "EPIC_FILE", os.path.join(BASE_DIR, "data", "epic_games.json")
 )
+# JSON do Xbox Game Pass PC (catálogo + chegaram/saíram), gerado por gamepass.py.
+GAMEPASS_FILE = os.environ.get(
+    "GAMEPASS_FILE", os.path.join(BASE_DIR, "data", "gamepass.json")
+)
 HTTP_TIMEOUT = 10  # segundos — todos os fetches externos
 
 # Headers de browser (a Steam bloqueia/limita user-agents "robôs").
@@ -118,6 +122,21 @@ def api_epic_games():
         }), 503
     directory = os.path.dirname(EPIC_FILE) or "."
     return send_from_directory(directory, os.path.basename(EPIC_FILE),
+                               mimetype="application/json")
+
+# ─── /api/gamepass ────────────────────────────────────────────────────────────
+
+@app.route("/api/gamepass")
+def api_gamepass():
+    """JSON do Xbox Game Pass PC: catalog + added + removed. 503 se ainda vazio."""
+    if not os.path.exists(GAMEPASS_FILE):
+        return jsonify({
+            "ok": False,
+            "error": "catalogo Game Pass ainda nao coletado — rode o cron (gamepass.py)",
+            "added": [], "removed": [], "catalog": [],
+        }), 503
+    directory = os.path.dirname(GAMEPASS_FILE) or "."
+    return send_from_directory(directory, os.path.basename(GAMEPASS_FILE),
                                mimetype="application/json")
 
 # ─── /api/steam-user ──────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@
     <button class="tab-btn active" data-tab="deals">🏷️ Promoções Steam</button>
     <button class="tab-btn" data-tab="epic">🛒 Promoções Epic</button>
     <button class="tab-btn" data-tab="free">🎁 Grátis</button>
+    <button class="tab-btn" data-tab="gamepass">🎮 Game Pass</button>
   </nav>
 
   <!-- ═══ ABA: Promoções Steam ═══════════════════════════════════════════ -->
@@ -143,6 +144,21 @@
     </div>
     <div id="free-loading">Carregando jogos grátis…</div>
     <div id="free-root"></div>
+  </section>
+
+  <!-- ═══ ABA: Game Pass (PC) ════════════════════════════════════════════ -->
+  <section id="tab-gamepass" class="hidden">
+    <div class="subtitle" id="gp-subtitle"></div>
+    <div class="free-intro">
+      <b>Xbox Game Pass (PC)</b> — o que <b>chegou</b> e o que <b>saiu</b>
+      recentemente (últimos 14 dias) e o <b>catálogo atual</b> completo
+      (atualizado 1×/dia). Não há lista pública confiável de "anunciados", então
+      monitoramos o catálogo: assim que um jogo entra/sai, ele aparece aqui.
+    </div>
+    <input type="search" id="gp-search" class="gp-search"
+           placeholder="🔎 Buscar no catálogo…" autocomplete="off">
+    <div id="gp-loading">Carregando Game Pass…</div>
+    <div id="gp-root"></div>
   </section>
 
   <footer>

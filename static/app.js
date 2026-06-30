@@ -18,6 +18,8 @@ let FREE_PAYLOAD = null;
 // Última resposta de /api/epic-games (carregada sob demanda ao abrir a aba)
 let EPIC_PAYLOAD = null;
 let EPIC_ONLY_CHEAPER = false;
+// Última resposta de /api/gamepass (carregada sob demanda ao abrir a aba)
+let GP_PAYLOAD = null;
 
 // Por padrão a lista mostra só score CUTOFF–10; o resto fica num "Ver mais".
 const SCORE_CUTOFF = 7.0;
@@ -315,8 +317,10 @@ function switchTab(tab) {
   el("tab-deals").classList.toggle("hidden", tab !== "deals");
   el("tab-epic").classList.toggle("hidden", tab !== "epic");
   el("tab-free").classList.toggle("hidden", tab !== "free");
+  el("tab-gamepass").classList.toggle("hidden", tab !== "gamepass");
   if (tab === "free" && FREE_PAYLOAD === null) loadFreeGames();
   if (tab === "epic" && EPIC_PAYLOAD === null) loadEpicGames();
+  if (tab === "gamepass" && GP_PAYLOAD === null) loadGamepass();
 }
 
 function fmtDate(iso) {
@@ -491,6 +495,63 @@ async function loadEpicGames() {
   }
 }
 
+// ─── Game Pass (PC) ────────────────────────────────────────────────────────────
+
+function gpCard(g) {
+  const cover = g.cover
+    ? `<img src="${escapeHtml(g.cover)}" alt="" loading="lazy">`
+    : '<div class="free-noimg">🎮</div>';
+  return `
+    <a class="gp-card" href="${escapeHtml(g.url)}" target="_blank" rel="noopener" title="${escapeHtml(g.title)}">
+      <div class="gp-cover">${cover}</div>
+      <div class="gp-title">${escapeHtml(g.title)}</div>
+      <div class="gp-dev">${escapeHtml(g.dev || "")}</div>
+    </a>`;
+}
+
+function gpSection(title, items, cls) {
+  if (!items || !items.length) return "";
+  return `<h2 class="free-h2 ${cls || ""}">${title} <span class="free-n">${items.length}</span></h2>
+          <div class="gp-grid">${items.map(gpCard).join("")}</div>`;
+}
+
+function renderGamepass() {
+  if (!GP_PAYLOAD) return;
+  el("gp-subtitle").textContent =
+    "Atualizado em " + (GP_PAYLOAD.generated_at_human || "—") +
+    "  —  " + (GP_PAYLOAD.total || 0) + " jogos no catálogo";
+
+  const q = ((el("gp-search") || {}).value || "").trim().toLowerCase();
+  let catalog = GP_PAYLOAD.catalog || [];
+  if (q) catalog = catalog.filter((g) => String(g.title || "").toLowerCase().includes(q));
+
+  let html = "";
+  if (!q) {
+    html += gpSection("🆕 Chegaram recentemente", GP_PAYLOAD.added, "gp-in");
+    html += gpSection("👋 Saíram recentemente", GP_PAYLOAD.removed, "gp-out");
+  }
+  html += gpSection(q ? "Resultados da busca" : "📚 Catálogo atual", catalog);
+  el("gp-root").innerHTML = html ||
+    '<div class="empty-tier">Nenhum jogo encontrado.</div>';
+}
+
+async function loadGamepass() {
+  const loading = el("gp-loading");
+  try {
+    const r = await fetch("/api/gamepass", { cache: "no-store" });
+    if (r.status === 503) {
+      loading.textContent = "O catálogo do Game Pass ainda não foi coletado (aguarde o cron diário).";
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    GP_PAYLOAD = await r.json();
+    loading.classList.add("hidden");
+    renderGamepass();
+  } catch (e) {
+    loading.textContent = "Falha ao carregar o Game Pass: " + e.message;
+  }
+}
+
 // ─── Carga inicial ────────────────────────────────────────────────────────────
 
 async function loadGames() {
@@ -657,6 +718,10 @@ document.addEventListener("DOMContentLoaded", () => {
     epicToggle.classList.toggle("active", EPIC_ONLY_CHEAPER);
     renderEpic();
   });
+
+  // Busca da aba Game Pass
+  const gpSearch = el("gp-search");
+  if (gpSearch) gpSearch.addEventListener("input", renderGamepass);
 
   loadGames();
 });
