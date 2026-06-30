@@ -124,7 +124,7 @@ function blockHtml(block) {
         <span class="block-name">${escapeHtml(block.name)}</span>
         <span class="block-count">${total} jogos</span>
       </div>
-      <table>
+      <div class="table-scroll"><table>
         <thead>
           <tr>
             <th>#</th>
@@ -140,7 +140,7 @@ function blockHtml(block) {
         </thead>
         <tbody>${topRows}${tailRows}
         </tbody>${tfoot}
-      </table>
+      </table></div>
     </div>`;
   return { html, count: total };
 }
@@ -237,10 +237,10 @@ function flatListHtml(items, label) {
         <span class="block-name">${escapeHtml(label)}</span>
         <span class="block-count">${rank} jogos</span>
       </div>
-      <table>${TABLE_HEAD}
+      <div class="table-scroll"><table>${TABLE_HEAD}
         <tbody>${rows}
         </tbody>
-      </table>
+      </table></div>
     </div>`;
 }
 

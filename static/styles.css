@@ -10,6 +10,7 @@ body {
   padding: 20px;
   max-width: 1120px;      /* conteúdo centralizado e enxuto (sem esticar a tela toda) */
   margin: 0 auto;
+  overflow-x: hidden;     /* segurança: nada estoura a largura da tela */
 }
 h1 {
   color: #66c0f4;
@@ -187,6 +188,9 @@ h1 {
 }
 .block-name  { font-weight: 700; font-size: 1rem; }
 .block-count { font-size: 0.82rem; opacity: 0.85; }
+/* a tabela (9 colunas) rola na horizontal DENTRO do bloco em telas estreitas,
+   sem forçar a página a esticar */
+.table-scroll { overflow-x: auto; }
 table {
   width: 100%;
   border-collapse: collapse;
@@ -474,4 +478,19 @@ footer {
 @media (max-width: 560px) {
   .free-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .filters input[type="search"] { flex: 1 1 100%; }
+}
+
+/* ─── Mobile: tabela enxuta que não quebra ─────────────────────────────────── */
+@media (max-width: 767px) {
+  body { padding: 12px; }
+  .formula { font-size: 0.78rem; }
+  table { font-size: 0.74rem; }
+  thead th, td { padding: 5px 6px; }
+  td.name { min-width: 120px; }
+  td.name img { width: 56px; height: 21px; }
+  td.name span { font-size: 0.76rem; }
+  /* esconde as colunas menos essenciais p/ caber sem rolar muito:
+     Reviews, Preço Original e Low Ever (ficam Nome/Desconto/Review%/Promo/Score) */
+  td.reviews, td.orig, td.low-ever,
+  thead th:nth-child(5), thead th:nth-child(6), thead th:nth-child(8) { display: none; }
 }
