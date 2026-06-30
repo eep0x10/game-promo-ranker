@@ -2,11 +2,14 @@
    Reaproveita o visual do generate_html (dark / Steam-themed). */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: #1b2838; }   /* cobre as laterais quando o body é centralizado */
 body {
   font-family: "Segoe UI", sans-serif;
   background: #1b2838;
   color: #c6d4df;
   padding: 20px;
+  max-width: 1120px;      /* conteúdo centralizado e enxuto (sem esticar a tela toda) */
+  margin: 0 auto;
 }
 h1 {
   color: #66c0f4;
