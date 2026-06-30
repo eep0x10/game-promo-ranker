@@ -484,56 +484,17 @@ def _check_one_low(game: dict) -> tuple[str, bool, float, float]:
         return appid, False, 0.0, 0.0
 
 
-def enrich_historical_lows(games: list[dict], cache_path: str) -> None:
+def apply_low_cache(games: list[dict], cache_path: str) -> None:
     """
-    Preenche game['historical_low'] e game['low_price_brl'] usando um CACHE
-    persistente de baixa histórica (cache_path, no volume data/).
+    Aplica o CACHE de baixa histórica a TODOS os jogos (preenche
+    game['low_price_brl'] e game['historical_low']) — SEM rede. Rápido.
 
-    Estratégia (economiza processamento futuro):
-      1. Só consulta o CheapShark para appids AINDA NÃO cacheados (jogos novos).
-         Após o primeiro seeding, o custo externo cai a ~zero por execução.
-      2. Para TODOS os jogos, aplica a baixa do cache e exibe sempre.
-      3. A baixa só muda quando o preço atual SUPERA o recorde (preço < baixa
-         conhecida) — aí o cache é atualizado para o novo mínimo.
+    A baixa só muda quando o preço atual SUPERA o recorde (preço < baixa
+    conhecida): aí o próprio preço atual vira a nova baixa (sem reconsultar o
+    CheapShark) e é gravado na hora. Chamado na fase 1 (publica já o que está
+    cacheado) e de novo na fase 2 (após semear os novos).
     """
     cache = _load_low_cache(cache_path)
-
-    # ── 1) Seeding: apenas appids ausentes do cache (jogos novos) ──────────────
-    missing = [g for g in games if g.get("appid") and g["appid"] not in cache]
-    if missing:
-        n = len(missing)
-        print(f"  Baixa histórica: semeando {n} jogos novos via CheapShark "
-              f"(~{n*2*_CS_INTERVAL:.0f}s); o restante vem do cache...")
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {executor.submit(_check_one_low, g): g for g in missing}
-            done = 0
-            for fut in as_completed(futures):
-                g = futures[fut]
-                _appid, _is_low, cheapest_usd, current_usd = fut.result()
-                brl_val = _parse_brl(g.get("sale_price", ""))
-                # Converte cheapest_usd → BRL pelo ratio do próprio jogo (não câmbio genérico)
-                low_brl = 0.0
-                src = "obs"
-                if cheapest_usd > 0 and brl_val > 0 and current_usd > 0:
-                    low_brl, src = cheapest_usd * (brl_val / current_usd), "cs"
-                elif brl_val > 0:
-                    low_brl, src = brl_val, "obs"   # sem CheapShark → preço atual é a baixa conhecida
-                if low_brl > 0:
-                    cache[g["appid"]] = {
-                        "low_brl": round(low_brl, 2),
-                        "low_str": _fmt_brl(low_brl),
-                        "src":     src,
-                        "beaten":  False,
-                        "updated": datetime.now().isoformat(timespec="seconds"),
-                    }
-                    _save_low_cache(cache_path, cache)   # grava cada baixa na hora → ao vivo + resumível
-                done += 1
-                print(f"\r  CheapShark seed: {done}/{n}...", end="", flush=True)
-        print()
-    else:
-        print("  Baixa histórica: cache cobre todos os jogos (0 chamadas externas).")
-
-    # ── 2) Aplica cache a todos; 3) só atualiza quando o preço bate o recorde ───
     now_iso = datetime.now().isoformat(timespec="seconds")
     records = 0
     for g in games:
@@ -545,8 +506,6 @@ def enrich_historical_lows(games: list[dict], cache_path: str) -> None:
         cur_brl = _parse_brl(g.get("sale_price", ""))
         low_brl = float(ent.get("low_brl") or 0.0)
 
-        # Novo recorde: preço atual estritamente menor que a baixa conhecida → atualiza
-        # na hora (sem reconsultar o CheapShark — o próprio preço atual é a nova baixa).
         if cur_brl > 0 and (low_brl <= 0 or cur_brl < low_brl - 0.005):
             low_brl = cur_brl
             ent.update(low_brl=round(low_brl, 2), low_str=_fmt_brl(low_brl),
@@ -561,8 +520,52 @@ def enrich_historical_lows(games: list[dict], cache_path: str) -> None:
         confirmed = ent.get("src") == "cs" or ent.get("beaten")
         g["historical_low"] = bool(at_low and confirmed)
 
-    print(f"  Baixa histórica: {records} novos recordes · {len(cache)} jogos no cache.")
-    _save_low_cache(cache_path, cache)
+    have = sum(1 for g in games if g.get("low_price_brl"))
+    print(f"  Baixa histórica: {have}/{len(games)} com baixa exibida · "
+          f"{records} novos recordes · {len(cache)} no cache.")
+
+
+def seed_low_cache(games: list[dict], cache_path: str) -> None:
+    """
+    Semeia o cache de baixa histórica APENAS para os jogos ainda não cacheados,
+    via CheapShark (lento). Grava cada baixa na hora → ao vivo e RESUMÍVEL: um
+    timeout no meio não perde o progresso, a próxima execução continua de onde
+    parou. Após o primeiro seeding completo, o custo externo cai a ~zero.
+    """
+    cache = _load_low_cache(cache_path)
+    missing = [g for g in games if g.get("appid") and g["appid"] not in cache]
+    if not missing:
+        print("  Baixa histórica: cache cobre todos os jogos (0 chamadas externas).")
+        return
+    n = len(missing)
+    print(f"  Baixa histórica: semeando {n} jogos novos via CheapShark "
+          f"(~{n*2*_CS_INTERVAL:.0f}s); o restante já veio do cache...")
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(_check_one_low, g): g for g in missing}
+        done = 0
+        for fut in as_completed(futures):
+            g = futures[fut]
+            _appid, _is_low, cheapest_usd, current_usd = fut.result()
+            brl_val = _parse_brl(g.get("sale_price", ""))
+            # Converte cheapest_usd → BRL pelo ratio do próprio jogo (não câmbio genérico)
+            low_brl = 0.0
+            src = "obs"
+            if cheapest_usd > 0 and brl_val > 0 and current_usd > 0:
+                low_brl, src = cheapest_usd * (brl_val / current_usd), "cs"
+            elif brl_val > 0:
+                low_brl, src = brl_val, "obs"        # sem CheapShark → preço atual é a baixa conhecida
+            if low_brl > 0:
+                cache[g["appid"]] = {
+                    "low_brl": round(low_brl, 2),
+                    "low_str": _fmt_brl(low_brl),
+                    "src":     src,
+                    "beaten":  False,
+                    "updated": datetime.now().isoformat(timespec="seconds"),
+                }
+                _save_low_cache(cache_path, cache)   # grava cada baixa na hora → resumível
+            done += 1
+            print(f"\r  CheapShark seed: {done}/{n}...", end="", flush=True)
+    print()
 
 # ─── Output terminal ──────────────────────────────────────────────────────────
 
@@ -998,18 +1001,20 @@ def main():
     for k in by_block:
         by_block[k].sort(key=lambda x: x["score"], reverse=True)
 
-    # FASE 1 — publica a lista de jogos JÁ (sem dados de promoção histórica),
-    # pra página aparecer rápido enquanto o enriquecimento (lento) roda.
+    # FASE 1 — aplica as baixas JÁ presentes no cache (sem rede) e publica
+    # imediatamente, pra página aparecer rápido já com as baixas conhecidas.
+    apply_low_cache(unique, hist_cache_path)
     if output_html:
         save_html(generate_html(by_block, len(unique)), out_path)
         print(f"\n[fase 1] lista publicada em {out_path}")
     if json_path:
         save_json(by_block, len(unique), json_path)
-        print(f"[fase 1] JSON publicado em {json_path}")
+        print(f"[fase 1] JSON publicado em {json_path} (com as baixas do cache)")
 
-    # FASE 2 — enriquece com baixa histórica (cache persistente; só consulta o
-    # CheapShark para jogos novos) e republica grifando os em baixa histórica.
-    enrich_historical_lows(unique, hist_cache_path)
+    # FASE 2 — semeia os jogos ainda não cacheados (CheapShark, lento e resumível),
+    # reaplica o cache e republica grifando os em baixa histórica.
+    seed_low_cache(unique, hist_cache_path)
+    apply_low_cache(unique, hist_cache_path)
 
     print_results(by_block, len(unique))
 
