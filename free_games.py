@@ -165,8 +165,10 @@ def _parse_psn_item(title, body, link, pubdate, now):
     blob  = re.sub(r"\s+", " ", html.unescape(blob)).lower()
     heads = [(m.start(), html.unescape(m.group(1)).strip())
              for m in re.finditer(r"<h[1-4][^>]*>([^<|]+?)\s*\|\s*PS[45][^<]*</h[1-4]>", body or "")]
+    # \ssrc= (com espaço) evita casar data-src= de imagens lazy/modal ocultas,
+    # cujas URLs apontam p/ assets inexistentes (404). Pega só o <img> exibido.
     imgs  = [(m.start(), m.group(1))
-             for m in re.finditer(r'<img[^>]+src="([^"]+)"', body or "")]
+             for m in re.finditer(r'<img[^>]*?\ssrc="([^"]+)"', body or "")]
 
     free_from, free_until = start.isoformat(), end.isoformat()
     entries, seen = [], set()
