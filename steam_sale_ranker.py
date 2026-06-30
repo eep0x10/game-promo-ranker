@@ -499,13 +499,15 @@ def apply_low_cache(games: list[dict], cache_path: str) -> None:
     records = 0
     for g in games:
         ent = cache.get(g.get("appid", ""))
-        if ent is None:
+        # Só exibe baixa VERIFICADA do CheapShark (src="cs"). Sem isso → "—".
+        if ent is None or ent.get("src") != "cs":
             g["historical_low"] = False
             g["low_price_brl"] = ""
             continue
         cur_brl = _parse_brl(g.get("sale_price", ""))
         low_brl = float(ent.get("low_brl") or 0.0)
 
+        # Novo recorde: preço atual abaixo da baixa do CheapShark → vira a nova baixa.
         if cur_brl > 0 and (low_brl <= 0 or cur_brl < low_brl - 0.005):
             low_brl = cur_brl
             ent.update(low_brl=round(low_brl, 2), low_str=_fmt_brl(low_brl),
@@ -514,11 +516,8 @@ def apply_low_cache(games: list[dict], cache_path: str) -> None:
             _save_low_cache(cache_path, cache)       # grava o novo recorde imediatamente
 
         g["low_price_brl"] = ent.get("low_str") or (_fmt_brl(low_brl) if low_brl > 0 else "")
-        # Selo "BAIXA HISTÓRICA" (no menor de sempre AGORA, margem 2%). Para jogos só
-        # observados (sem CheapShark), exige um drop real já visto p/ evitar falso-positivo.
-        at_low    = cur_brl > 0 and low_brl > 0 and cur_brl <= low_brl * 1.02
-        confirmed = ent.get("src") == "cs" or ent.get("beaten")
-        g["historical_low"] = bool(at_low and confirmed)
+        # Selo "BAIXA HISTÓRICA": preço atual no menor de sempre AGORA (margem 2%).
+        g["historical_low"] = bool(cur_brl > 0 and low_brl > 0 and cur_brl <= low_brl * 1.02)
 
     have = sum(1 for g in games if g.get("low_price_brl"))
     print(f"  Baixa histórica: {have}/{len(games)} com baixa exibida · "
@@ -533,38 +532,38 @@ def seed_low_cache(games: list[dict], cache_path: str) -> None:
     parou. Após o primeiro seeding completo, o custo externo cai a ~zero.
     """
     cache = _load_low_cache(cache_path)
-    missing = [g for g in games if g.get("appid") and g["appid"] not in cache]
-    if not missing:
+    # Verifica o que falta E o que está como "obs" (baixa não-verificada de runs
+    # antigas em que o CheapShark falhou): só confiamos em baixa REAL (src="cs").
+    needs = [g for g in games if g.get("appid")
+             and cache.get(g["appid"], {}).get("src") != "cs"]
+    if not needs:
         print("  Baixa histórica: cache cobre todos os jogos (0 chamadas externas).")
         return
-    n = len(missing)
-    print(f"  Baixa histórica: semeando {n} jogos novos via CheapShark "
-          f"(~{n*2*_CS_INTERVAL:.0f}s); o restante já veio do cache...")
+    n = len(needs)
+    print(f"  Baixa histórica: verificando {n} jogos no CheapShark "
+          f"(~{n*2*_CS_INTERVAL:.0f}s); o resto já está verificado no cache...")
     with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(_check_one_low, g): g for g in missing}
+        futures = {executor.submit(_check_one_low, g): g for g in needs}
         done = 0
         for fut in as_completed(futures):
             g = futures[fut]
             _appid, _is_low, cheapest_usd, current_usd = fut.result()
             brl_val = _parse_brl(g.get("sale_price", ""))
-            # Converte cheapest_usd → BRL pelo ratio do próprio jogo (não câmbio genérico)
-            low_brl = 0.0
-            src = "obs"
+            # Só grava baixa VERIFICADA do CheapShark. Sem dado/erro (429) → NÃO
+            # cacheia (mostra "—" e tenta de novo na próxima execução). Nada de
+            # "obs" (preço atual fingindo de baixa histórica).
             if cheapest_usd > 0 and brl_val > 0 and current_usd > 0:
-                low_brl, src = cheapest_usd * (brl_val / current_usd), "cs"
-            elif brl_val > 0:
-                low_brl, src = brl_val, "obs"        # sem CheapShark → preço atual é a baixa conhecida
-            if low_brl > 0:
+                low_brl = cheapest_usd * (brl_val / current_usd)
                 cache[g["appid"]] = {
                     "low_brl": round(low_brl, 2),
                     "low_str": _fmt_brl(low_brl),
-                    "src":     src,
+                    "src":     "cs",
                     "beaten":  False,
                     "updated": datetime.now().isoformat(timespec="seconds"),
                 }
                 _save_low_cache(cache_path, cache)   # grava cada baixa na hora → resumível
             done += 1
-            print(f"\r  CheapShark seed: {done}/{n}...", end="", flush=True)
+            print(f"\r  CheapShark: {done}/{n}...", end="", flush=True)
     print()
 
 # ─── Output terminal ──────────────────────────────────────────────────────────
