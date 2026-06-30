@@ -526,6 +526,7 @@ def enrich_historical_lows(games: list[dict], cache_path: str) -> None:
                         "beaten":  False,
                         "updated": datetime.now().isoformat(timespec="seconds"),
                     }
+                    _save_low_cache(cache_path, cache)   # grava cada baixa na hora → ao vivo + resumível
                 done += 1
                 print(f"\r  CheapShark seed: {done}/{n}...", end="", flush=True)
         print()
@@ -544,12 +545,14 @@ def enrich_historical_lows(games: list[dict], cache_path: str) -> None:
         cur_brl = _parse_brl(g.get("sale_price", ""))
         low_brl = float(ent.get("low_brl") or 0.0)
 
-        # Novo recorde: preço atual estritamente menor que a baixa conhecida → atualiza.
+        # Novo recorde: preço atual estritamente menor que a baixa conhecida → atualiza
+        # na hora (sem reconsultar o CheapShark — o próprio preço atual é a nova baixa).
         if cur_brl > 0 and (low_brl <= 0 or cur_brl < low_brl - 0.005):
             low_brl = cur_brl
             ent.update(low_brl=round(low_brl, 2), low_str=_fmt_brl(low_brl),
                        beaten=True, updated=now_iso)
             records += 1
+            _save_low_cache(cache_path, cache)       # grava o novo recorde imediatamente
 
         g["low_price_brl"] = ent.get("low_str") or (_fmt_brl(low_brl) if low_brl > 0 else "")
         # Selo "BAIXA HISTÓRICA" (no menor de sempre AGORA, margem 2%). Para jogos só
