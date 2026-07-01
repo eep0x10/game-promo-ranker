@@ -237,6 +237,8 @@ td.orig  { width: 105px; color: #8f98a0; text-decoration: line-through; white-sp
 td.sale      { width: 105px; font-weight: 600; color: #beee11; white-space: nowrap; }
 td.low-ever  { width: 90px; font-family: monospace; color: #8f98a0; white-space: nowrap; font-size: 0.8rem; }
 tr.hist-low td.low-ever { color: #ffd24a; font-weight: 700; }
+td.low-ever.low-obs { color: #6f7a86; font-style: italic; }          /* baixa observada (~) */
+tr.hist-low td.low-ever.low-obs { color: #e0c06a; }                  /* obs em baixa: dourado suave */
 td.score { width: 65px; font-family: monospace; color: #66c0f4; white-space: nowrap; }
 
 /* baixa histórica = AMARELO */

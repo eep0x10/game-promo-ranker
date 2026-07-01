@@ -69,7 +69,12 @@ function gameRow(g, rank, color, isTail) {
   const imgHtml = g.img_url
     ? `<img src="${escapeHtml(g.img_url)}" alt="" loading="lazy">`
     : "";
+  const lowSrc = g.low_src || "";
   const lowEver = g.low_price_brl || "—";
+  const lowTitle = lowSrc === "obs"
+    ? "Menor preço observado desde que passamos a acompanhar (ainda não confirmado como recorde histórico)."
+    : (lowSrc === "cs" ? "Menor preço de todos os tempos (CheapShark)." : "");
+  const lowDisp = (lowSrc === "obs" && lowEver !== "—") ? "~" + lowEver : lowEver;
 
   return `
     <tr${trClass} data-appid="${escapeHtml(appid)}">
@@ -85,7 +90,7 @@ function gameRow(g, rank, color, isTail) {
       <td class="reviews">${escapeHtml(g.reviews_human != null ? g.reviews_human : g.total_reviews)}</td>
       <td class="orig">${escapeHtml(g.orig_price || "")}</td>
       <td class="sale">${escapeHtml(g.sale_price || "")}</td>
-      <td class="low-ever">${escapeHtml(lowEver)}</td>
+      <td class="low-ever${lowSrc === "obs" ? " low-obs" : ""}"${lowTitle ? ` title="${escapeHtml(lowTitle)}"` : ""}>${escapeHtml(lowDisp)}</td>
       <td class="score">${Number(g.score).toFixed(2)}</td>
     </tr>`;
 }

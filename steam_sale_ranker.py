@@ -510,32 +510,62 @@ def apply_low_cache(games: list[dict], cache_path: str) -> None:
     """
     cache = _load_low_cache(cache_path)
     now_iso = datetime.now().isoformat(timespec="seconds")
-    records = 0
+    records = obs_new = 0
+    dirty = False
     for g in games:
-        ent = cache.get(g.get("appid", ""))
-        # Só exibe baixa VERIFICADA do CheapShark (src="cs"). Sem isso → "—".
-        if ent is None or ent.get("src") != "cs":
+        appid = g.get("appid", "")
+        ent = cache.get(appid)
+        cur_brl = _parse_brl(g.get("sale_price", ""))
+
+        if ent is not None and ent.get("src") == "cs":
+            # Baixa VERIFICADA do CheapShark (recorde de todos os tempos).
+            low_brl = float(ent.get("low_brl") or 0.0)
+            # Novo recorde: preço atual abaixo da baixa → vira a nova baixa.
+            if cur_brl > 0 and (low_brl <= 0 or cur_brl < low_brl - 0.005):
+                low_brl = cur_brl
+                ent.update(low_brl=round(low_brl, 2), low_str=_fmt_brl(low_brl),
+                           beaten=True, updated=now_iso)
+                records += 1
+                dirty = True
+            g["low_price_brl"] = ent.get("low_str") or (_fmt_brl(low_brl) if low_brl > 0 else "")
+            g["low_src"] = "cs"
+            g["historical_low"] = bool(cur_brl > 0 and low_brl > 0 and cur_brl <= low_brl * 1.02)
+            continue
+
+        # ── Fallback OBSERVADO: sem dado do CheapShark ainda → mostra o MENOR
+        #    preço que já observamos (e vai baixando dia a dia). Garante que todo
+        #    jogo tenha um valor, não "—". Vira "cs" quando o seeding conseguir. ──
+        if cur_brl <= 0:
             g["historical_low"] = False
             g["low_price_brl"] = ""
+            g["low_src"] = ""
             continue
-        cur_brl = _parse_brl(g.get("sale_price", ""))
+        if ent is None:
+            ent = {"low_brl": round(cur_brl, 2), "low_str": _fmt_brl(cur_brl),
+                   "src": "obs", "beaten": False, "updated": now_iso}
+            cache[appid] = ent
+            obs_new += 1
+            dirty = True
+        else:
+            low_brl = float(ent.get("low_brl") or 0.0)
+            if low_brl <= 0 or cur_brl < low_brl - 0.005:   # novo menor observado
+                ent.update(low_brl=round(cur_brl, 2), low_str=_fmt_brl(cur_brl),
+                           beaten=(low_brl > 0), updated=now_iso)
+                dirty = True
         low_brl = float(ent.get("low_brl") or 0.0)
+        g["low_price_brl"] = ent.get("low_str") or ""
+        g["low_src"] = "obs"
+        # ★ só quando houve queda REAL observada (beaten) e está no menor agora.
+        g["historical_low"] = bool(cur_brl > 0 and low_brl > 0 and ent.get("beaten")
+                                   and cur_brl <= low_brl * 1.02)
 
-        # Novo recorde: preço atual abaixo da baixa do CheapShark → vira a nova baixa.
-        if cur_brl > 0 and (low_brl <= 0 or cur_brl < low_brl - 0.005):
-            low_brl = cur_brl
-            ent.update(low_brl=round(low_brl, 2), low_str=_fmt_brl(low_brl),
-                       beaten=True, updated=now_iso)
-            records += 1
-            _save_low_cache(cache_path, cache)       # grava o novo recorde imediatamente
-
-        g["low_price_brl"] = ent.get("low_str") or (_fmt_brl(low_brl) if low_brl > 0 else "")
-        # Selo "BAIXA HISTÓRICA": preço atual no menor de sempre AGORA (margem 2%).
-        g["historical_low"] = bool(cur_brl > 0 and low_brl > 0 and cur_brl <= low_brl * 1.02)
-
+    if dirty:
+        _save_low_cache(cache_path, cache)
     have = sum(1 for g in games if g.get("low_price_brl"))
-    print(f"  Baixa histórica: {have}/{len(games)} com baixa exibida · "
-          f"{records} novos recordes · {len(cache)} no cache.")
+    cs_n = sum(1 for g in games if g.get("low_src") == "cs")
+    print(f"  Baixa histórica: {have}/{len(games)} com valor ({cs_n} CheapShark · "
+          f"{have - cs_n} observadas) · {records} recordes novos · {obs_new} obs novas · "
+          f"{len(cache)} no cache.")
 
 
 def seed_low_cache(games: list[dict], cache_path: str) -> None:
@@ -918,6 +948,7 @@ def build_json_payload(by_block: dict[str, list[dict]], total_collected: int) ->
             row["historical_low"] = bool(g.get("historical_low", False))
             row["is_new"]         = bool(g.get("is_new", False))
             row["low_price_brl"]  = g.get("low_price_brl") or ""
+            row["low_src"]        = g.get("low_src") or ""   # "cs"=CheapShark · "obs"=menor observado
             row["reviews_human"]  = fmt_num(int(g.get("total_reviews") or 0))
             serialized.append(row)
         blocks.append({
