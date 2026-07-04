@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Steam Sale Ranker — frontend (v2)
+   Game Promo Ranker — frontend (v2)
    - fetch('/api/games') → cards ou tabela por bloco, com gauge de score,
      selo de qualidade de preço, sparkline, Steam Deck, gênero e multi-loja
    - favoritos (localStorage) + tema claro/escuro (localStorage)

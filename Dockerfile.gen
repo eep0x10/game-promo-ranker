@@ -1,4 +1,4 @@
-# Steam Sale Ranker — gerador de dados (cron)
+# Game Promo Ranker — gerador de dados (cron)
 # Roda steam_sale_ranker.py 1x/dia e escreve data/games.json (consumido pela app).
 # NÃO sobe servidor — é um job pontual. Agende via cron do host ou um sidecar.
 #

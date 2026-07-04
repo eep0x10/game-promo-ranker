@@ -1,11 +1,12 @@
 <div align="center">
 
-# 🎮 Steam Sale Ranker
+# 🎮 Game Promo Ranker
 
-**Encontra as melhores promoções da Steam por qualidade real — não só pelo tamanho do desconto.**
+**Encontra as melhores promoções de jogos por qualidade real — não só pelo tamanho do desconto.**
 
 Um ranker que combina avaliação dos jogadores, popularidade e desconto num **score de 0 a 10**,
-compara com a **sua wishlist** e ainda rastreia os **jogos grátis da Epic**.
+compara com a **sua wishlist**, cruza preços entre lojas (Steam · Epic · GOG · Fanatical)
+e ainda rastreia os **jogos grátis da Epic** e o catálogo do **Game Pass**.
 
 [**▶ Demo ao vivo**](https://gamepromo.eep0x10.tech) · feito em Python + Flask, atualizado 1×/dia
 

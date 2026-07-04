@@ -7,7 +7,7 @@ if sys.platform == "win32":
             _cur.reconfigure(encoding="utf-8", errors="replace")
 
 """
-Steam Sale Ranker
+Game Promo Ranker
 =================
 Lista jogos em promoção na Steam ordenados por score composto.
 
@@ -846,7 +846,7 @@ def print_results(by_block: dict[str, list[dict]], total_collected: int):
     W = 75
 
     print(f"\n{BOLD}{CYAN}{'═' * W}")
-    print(f"  STEAM SALE RANKER  —  {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    print(f"  GAME PROMO RANKER  —  {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     print(f"  Score 0-10 = qualidade(Wilson) × fama(log reviews) × bonus desconto")
     print(f"  Quanto maior, melhor a relação qualidade + fama + desconto")
     print(f"{'═' * W}{RESET}\n")
@@ -970,7 +970,7 @@ def generate_html(by_block: dict[str, list[dict]], total_collected: int) -> str:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Steam Sale Ranker</title>
+  <title>Game Promo Ranker</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -1099,7 +1099,7 @@ def generate_html(by_block: dict[str, list[dict]], total_collected: int) -> str:
   </style>
 </head>
 <body>
-  <h1>Steam Sale Ranker</h1>
+  <h1>Game Promo Ranker</h1>
   <div class="subtitle">Gerado em {now}  —  {total_collected} jogos coletados</div>
   <div class="formula">
     score 0–10 = qualidade(Wilson das reviews) × fama(log reviews) × bônus de desconto
@@ -1244,7 +1244,7 @@ def main():
     if numeric:
         max_pages = max(1, int(numeric[0]))
 
-    print(f"\n{BOLD}Steam Sale Ranker{RESET}")
+    print(f"\n{BOLD}Game Promo Ranker{RESET}")
     print(f"Buscando até {max_pages * COUNT_PER_PAGE} jogos em promoção...\n")
 
     all_games = collect_all(max_pages)

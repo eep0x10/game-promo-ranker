@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Steam Sale Ranker — backend Flask
+Game Promo Ranker — backend Flask
 =================================
 Serve o frontend estático e expõe 2 endpoints JSON:
 

@@ -1,4 +1,4 @@
-# Steam Sale Ranker — app Flask (frontend + API)
+# Game Promo Ranker — app Flask (frontend + API)
 # Serve a lista de jogos (JSON gerado pelo cron) e a comparação com o perfil Steam.
 # O JSON é gerado FORA deste container (cron rodando steam_sale_ranker.py --json),
 # normalmente montando data/ como volume. Ver Dockerfile.gen para o gerador.
