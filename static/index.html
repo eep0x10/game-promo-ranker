@@ -1,17 +1,37 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Steam Sale Ranker</title>
+  <meta name="description" content="As melhores promoções da Steam por qualidade real — score Wilson, baixa histórica, comparação com sua wishlist, jogos grátis e Game Pass.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <h1>Steam Sale Ranker</h1>
-  <div class="subtitle" id="subtitle">Carregando…</div>
+  <!-- ─── Top bar ─────────────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="logo">🎮</span>
+      <span>
+        <div class="brand-name">Steam <span class="accent">Sale</span> Ranker</div>
+        <div class="brand-tag">promoções por qualidade real, não só desconto</div>
+      </span>
+    </a>
+    <div class="topbar-actions">
+      <button id="theme-btn" class="icon-btn" title="Alternar tema claro/escuro" aria-label="Alternar tema">🌙</button>
+      <a class="icon-btn" href="https://github.com/eep0x10/steam-sale-ranker" target="_blank" rel="noopener" title="Código no GitHub" aria-label="GitHub">⌥</a>
+    </div>
+  </header>
 
-  <!-- ─── Abas ───────────────────────────────────────────────────────────── -->
+  <!-- ─── Hero ────────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <h1>Ache o negócio de verdade.</h1>
+    <div class="sub" id="subtitle">Carregando…</div>
+    <div class="stat-strip" id="stat-strip"></div>
+  </section>
+
+  <!-- ─── Abas ────────────────────────────────────────────────────────────── -->
   <nav class="tabs">
     <button class="tab-btn active" data-tab="deals">🏷️ Promoções Steam</button>
     <button class="tab-btn" data-tab="epic">🛒 Promoções Epic</button>
@@ -21,103 +41,95 @@
 
   <!-- ═══ ABA: Promoções Steam ═══════════════════════════════════════════ -->
   <section id="tab-deals">
-  <div class="formula">
-    score 0–10 = qualidade(Wilson das reviews) × fama(log de reviews) × bônus de desconto
-  </div>
-
-  <!-- ─── Busca de perfil Steam ─────────────────────────────────────────── -->
-  <div class="profile-search">
-    <div class="search-row">
-      <input
-        type="text"
-        id="profile-input"
-        placeholder="https://steamcommunity.com/id/seu_perfil"
-        autocomplete="off"
-        spellcheck="false">
-      <button id="profile-btn">Comparar com meu perfil</button>
-      <button id="wishonly-btn" class="secondary hidden">★ Ver apenas wishlist</button>
-      <button id="clear-btn" class="secondary hidden">Limpar</button>
+    <div class="formula">
+      score 0–10 = qualidade(Wilson das reviews) × fama(log de reviews) × bônus de desconto
     </div>
-    <div class="profile-status info" id="profile-status"></div>
-    <details class="apikey-box">
-      <summary>Opcional: também remover os jogos que eu já tenho (requer API key)</summary>
-      <input
-        type="text"
-        id="apikey-input"
-        placeholder="API key Steam (32 caracteres) — opcional"
-        autocomplete="off"
-        spellcheck="false"
-        maxlength="32">
-      <span class="apikey-hint">
-        Pegue a sua grátis em
-        <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener">steamcommunity.com/dev/apikey</a>.
-        Usada só nesta busca, nunca é salva no servidor. Sem ela, a wishlist
-        ainda é comparada normalmente.
-      </span>
-    </details>
-    <div class="profile-help">
-      A <b>comparação de wishlist funciona sem API key</b> — basta deixar a sua
-      <b>lista de desejos pública</b> (<b>Perfil → Editar perfil → Privacidade →
-      Lista de desejos: Público</b>). Aceita a URL completa
-      (<code>steamcommunity.com/id/...</code> ou <code>/profiles/...</code>) ou só o
-      seu nome personalizado. Jogos na sua <b>wishlist</b> ficam grifados em
-      <b>azul</b>.
-      <br><br>
-      Para <b>remover os jogos que você já tem</b>, a Steam fechou o acesso anônimo
-      à biblioteca — então isso é <b>opcional</b> e precisa de uma <b>API key</b>
-      (campo acima). Sem a key, só o destaque da wishlist é aplicado.
+
+    <!-- Busca de perfil Steam -->
+    <div class="profile-search">
+      <div class="search-row">
+        <input type="text" id="profile-input"
+          placeholder="https://steamcommunity.com/id/seu_perfil" autocomplete="off" spellcheck="false">
+        <button id="profile-btn" class="btn-primary">Comparar com meu perfil</button>
+        <button id="wishonly-btn" class="secondary hidden">★ Ver apenas wishlist</button>
+        <button id="clear-btn" class="secondary hidden">Limpar</button>
+      </div>
+      <div class="profile-status info" id="profile-status"></div>
+      <details class="apikey-box">
+        <summary>Opcional: também remover os jogos que eu já tenho (requer API key)</summary>
+        <input type="text" id="apikey-input" placeholder="API key Steam (32 caracteres) — opcional"
+          autocomplete="off" spellcheck="false" maxlength="32">
+        <span class="apikey-hint">
+          Pegue a sua grátis em
+          <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener">steamcommunity.com/dev/apikey</a>.
+          Usada só nesta busca, nunca é salva no servidor. Sem ela, a wishlist ainda é comparada normalmente.
+        </span>
+      </details>
+      <div class="profile-help">
+        A <b>comparação de wishlist funciona sem API key</b> — basta deixar a sua
+        <b>lista de desejos pública</b> (Perfil → Editar perfil → Privacidade →
+        Lista de desejos: Público). Jogos na sua <b>wishlist</b> ficam grifados em <b>azul</b>.
+      </div>
     </div>
-  </div>
 
-  <!-- ─── Filtros / busca ───────────────────────────────────────────────── -->
-  <div class="filters">
-    <input type="search" id="f-search" placeholder="🔎 Buscar por nome…" autocomplete="off">
-    <select id="f-discount" title="Desconto mínimo">
-      <option value="0">Qualquer desconto</option>
-      <option value="25">≥ 25% off</option>
-      <option value="50">≥ 50% off</option>
-      <option value="75">≥ 75% off</option>
-      <option value="90">≥ 90% off</option>
-    </select>
-    <select id="f-review" title="Avaliação mínima">
-      <option value="0">Qualquer avaliação</option>
-      <option value="70">≥ 70% positivas</option>
-      <option value="80">≥ 80% positivas</option>
-      <option value="90">≥ 90% positivas</option>
-    </select>
-    <select id="f-sort" title="Ordenar por">
-      <option value="score">Ordenar: Score</option>
-      <option value="discount">Maior desconto</option>
-      <option value="reviews">Mais reviews</option>
-      <option value="pct">Melhor avaliação</option>
-      <option value="price">Menor preço</option>
-    </select>
-    <button id="f-clear" class="secondary hidden">Limpar filtros</button>
-  </div>
+    <!-- Toolbar: view toggle + filtros -->
+    <div class="toolbar">
+      <div class="view-toggle" id="view-toggle" role="tablist" aria-label="Modo de exibição">
+        <button data-view="cards" class="active">▦ Cards</button>
+        <button data-view="table">≣ Tabela</button>
+      </div>
+      <div class="filters">
+        <input type="search" id="f-search" placeholder="🔎 Buscar por nome…" autocomplete="off">
+        <select id="f-genre" title="Gênero"><option value="">Todos os gêneros</option></select>
+        <select id="f-discount" title="Desconto mínimo">
+          <option value="0">Qualquer desconto</option>
+          <option value="25">≥ 25% off</option>
+          <option value="50">≥ 50% off</option>
+          <option value="75">≥ 75% off</option>
+          <option value="90">≥ 90% off</option>
+        </select>
+        <select id="f-review" title="Avaliação mínima">
+          <option value="0">Qualquer avaliação</option>
+          <option value="70">≥ 70% positivas</option>
+          <option value="80">≥ 80% positivas</option>
+          <option value="90">≥ 90% positivas</option>
+        </select>
+        <select id="f-sort" title="Ordenar por">
+          <option value="score">Ordenar: Score</option>
+          <option value="discount">Maior desconto</option>
+          <option value="deal">Mais perto da baixa</option>
+          <option value="reviews">Mais reviews</option>
+          <option value="pct">Melhor avaliação</option>
+          <option value="price">Menor preço</option>
+        </select>
+        <button id="f-clear" class="secondary hidden">Limpar filtros</button>
+      </div>
+    </div>
 
-  <!-- ─── Legenda / filtros por tag (clicáveis) ─────────────────────────── -->
-  <div class="legend" title="Clique para filtrar só esses jogos">
-    <button type="button" class="legend-item" data-tag="new">
-      <span class="sw new"></span> <b>NEW</b> — entrou em promoção hoje (vs. ontem)</button>
-    <button type="button" class="legend-item" data-tag="hist">
-      <span class="sw hist"></span> <b>Baixa histórica</b> — menor preço de sempre</button>
-    <button type="button" class="legend-item" data-tag="wish">
-      <span class="sw wish"></span> <b>Na sua wishlist</b> — após comparar o perfil</button>
-  </div>
+    <!-- Legenda / filtros por tag (clicáveis) -->
+    <div class="legend" title="Clique para filtrar só esses jogos">
+      <button type="button" class="legend-item" data-tag="fav">
+        <span class="sw fav"></span> <b>Favoritos</b></button>
+      <button type="button" class="legend-item" data-tag="new">
+        <span class="sw new"></span> <b>NEW</b> — entrou hoje</button>
+      <button type="button" class="legend-item" data-tag="hist">
+        <span class="sw hist"></span> <b>Baixa histórica</b></button>
+      <button type="button" class="legend-item" data-tag="wish">
+        <span class="sw wish"></span> <b>Na wishlist</b></button>
+    </div>
 
-  <div id="loading">Carregando promoções…</div>
-  <div id="error-box" class="hidden"></div>
-  <div id="games-root"></div>
+    <div id="loading"></div>
+    <div id="error-box" class="hidden"></div>
+    <div id="games-root"></div>
   </section>
 
   <!-- ═══ ABA: Promoções Epic ════════════════════════════════════════════ -->
   <section id="tab-epic" class="hidden">
-    <div class="subtitle" id="epic-subtitle"></div>
+    <div class="sub" id="epic-subtitle"></div>
     <div class="free-intro">
-      Jogos <b>em promoção na Epic Games Store</b> (atualizado 1×/dia). A Epic não
-      expõe avaliações como a Steam, então a lista é ordenada por desconto. Quando
-      o jogo <b>também está em promoção na Steam</b>, o <b>preço da Steam aparece ao
-      lado</b> — e se a Epic estiver <b>mais barata</b>, ele é destacado e sobe pro topo.
+      Jogos <b>em promoção na Epic Games Store</b> (atualizado 1×/dia). Quando o jogo
+      <b>também está em promoção na Steam</b>, o <b>preço da Steam aparece ao lado</b> — e se a
+      Epic estiver <b>mais barata</b>, ele é destacado e sobe pro topo.
     </div>
     <div class="filters">
       <input type="search" id="epic-search" placeholder="🔎 Buscar por nome…" autocomplete="off">
@@ -129,50 +141,40 @@
       <button type="button" class="legend-item" id="epic-cheaper-toggle" data-tag="cheaper">
         <span class="sw cheaper"></span> <b>Só mais baratos que a Steam</b></button>
     </div>
-    <div id="epic-loading">Carregando promoções da Epic…</div>
+    <div id="epic-loading"></div>
     <div id="epic-root"></div>
   </section>
 
-  <!-- ═══ ABA: Grátis (Epic + PSN) ═══════════════════════════════════════ -->
+  <!-- ═══ ABA: Grátis ════════════════════════════════════════════════════ -->
   <section id="tab-free" class="hidden">
-    <div class="subtitle" id="free-subtitle"></div>
+    <div class="sub" id="free-subtitle"></div>
     <div class="free-intro">
-      Jogos <b>grátis</b> na <b>Epic</b> (resgatar e ficar pra sempre) e os
-      <b>jogos mensais do PS Plus</b> (atualizado 1×/dia). O selo na capa indica a
-      plataforma. <b>Em breve</b> mostra os próximos (inclui o próximo mês do PS
-      Plus assim que a Sony anuncia). O <b>histórico</b> guarda o que já passou.
+      Jogos <b>grátis</b> na <b>Epic</b> (resgatar e ficar pra sempre) e os <b>jogos mensais do
+      PS Plus</b> (atualizado 1×/dia). <b>Em breve</b> mostra os próximos; o <b>histórico</b> guarda o que já passou.
     </div>
-    <div id="free-loading">Carregando jogos grátis…</div>
+    <div id="free-loading"></div>
     <div id="free-root"></div>
   </section>
 
   <!-- ═══ ABA: Game Pass (PC) ════════════════════════════════════════════ -->
   <section id="tab-gamepass" class="hidden">
-    <div class="subtitle" id="gp-subtitle"></div>
+    <div class="sub" id="gp-subtitle"></div>
     <div class="free-intro">
-      <b>Xbox Game Pass (PC)</b> — o que <b>chegou</b> e o que <b>saiu</b>
-      recentemente (últimos 14 dias) e o <b>catálogo atual</b> completo
-      (atualizado 1×/dia). Não há lista pública confiável de "anunciados", então
-      monitoramos o catálogo: assim que um jogo entra/sai, ele aparece aqui.
+      <b>Xbox Game Pass (PC)</b> — o que <b>chegou</b> e o que <b>saiu</b> recentemente e o
+      <b>catálogo atual</b> completo (atualizado 1×/dia).
     </div>
-    <input type="search" id="gp-search" class="gp-search"
-           placeholder="🔎 Buscar no catálogo…" autocomplete="off">
-    <div id="gp-loading">Carregando Game Pass…</div>
+    <input type="search" id="gp-search" class="gp-search" placeholder="🔎 Buscar no catálogo…" autocomplete="off">
+    <div id="gp-loading"></div>
     <div id="gp-root"></div>
   </section>
 
   <footer>
-    Score 0–10 = <b>qualidade</b> × <b>fama</b> × <b>bônus de desconto</b>.<br>
-    Qualidade = limite inferior de Wilson (95%) das reviews positivas — junta
-    "% positivas" e "nº de reviews" com confiança estatística (95% de 200 reviews
-    vale menos que 95% de 200 mil). Fama (log das reviews) e desconto são
-    modificadores suaves, então um bom jogo nunca é zerado por ter pouco desconto,
-    nem um jogo ruim é salvo por ter muito.<br>
-    Cada bloco mostra por padrão os jogos com <b>score 7–10</b>; os abaixo de 7
-    ficam num <b>"Ver mais" ao fim do próprio bloco</b>. Wishlist comparada via
-    endpoint público da Steam (sem API key);
-    biblioteca (jogos que você já tem) é opcional e usa uma API key só nesta
-    requisição — nada é armazenado no servidor.
+    <b>Score 0–10</b> = qualidade × fama × bônus de desconto. Qualidade = limite inferior de
+    Wilson (95%) das reviews positivas — junta "% positivas" e "nº de reviews" com confiança
+    estatística (95% de 200 reviews vale menos que 95% de 200 mil). O selo de preço compara o
+    valor atual com a <b>baixa histórica</b>; favoritos e tema ficam salvos no seu navegador.
+    Wishlist comparada via endpoint público da Steam (sem API key); biblioteca é opcional e usa
+    uma API key só nesta requisição — nada é armazenado no servidor.
   </footer>
 
   <script src="/static/app.js"></script>

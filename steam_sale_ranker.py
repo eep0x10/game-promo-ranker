@@ -298,6 +298,10 @@ def _parse_row(row) -> dict | None:
         if not img_url and appid:
             img_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_231x87.jpg"
 
+        # Capa larga (460x215) para a visão em cards do frontend.
+        header_img = (f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+                      if appid else "")
+
         return {
             "name":          name,
             "appid":         appid,
@@ -310,6 +314,7 @@ def _parse_row(row) -> dict | None:
             "block":         review_block(pct_positive, total_reviews),
             "url":           row.get("href", f"https://store.steampowered.com/app/{appid}/"),
             "img_url":       img_url,
+            "header_img":    header_img,
         }
     except Exception:
         return None
@@ -373,6 +378,17 @@ def collect_all(max_pages: int) -> list[dict]:
 # Rate limit: lock compartilhado garante ≤ 4.5 req/s (não estourar o CheapShark)
 
 import threading as _threading
+
+# CheapShark storeID → nome. O mesmo /games?id= que consultamos p/ a baixa já traz
+# TODAS as lojas em `deals`, então cruzar preços multi-loja sai "de graça" (reuso).
+CS_STORES = {
+    "1": "Steam", "3": "GreenManGaming", "7": "GOG", "11": "Humble",
+    "15": "Fanatical", "25": "Epic", "27": "Gamesplanet", "13": "Ubisoft",
+    "23": "GameBillet", "24": "Voidu", "30": "IndieGala", "35": "DreamGame",
+}
+# Só surfaçamos lojas "confiáveis" (chave oficial p/ Steam) na comparação.
+CS_STORES_SHOW = {"1", "3", "7", "11", "15", "25", "27"}
+
 _cs_lock       = _threading.Lock()
 _cs_last_call  = [0.0]
 _CS_INTERVAL   = 0.5    # 2 req/s — seguro para uso diário
@@ -459,43 +475,71 @@ def _save_low_cache(path: str, cache: dict) -> None:
         pass
 
 
-def _check_one_low(game: dict) -> tuple[str, bool, float, float]:
+def _best_deals_by_store(deals: list) -> list[dict]:
+    """Menor deal por loja (só as lojas em CS_STORES_SHOW). Preço em USD (crú)."""
+    best: dict[str, dict] = {}
+    for d in deals or []:
+        sid = str(d.get("storeID"))
+        if sid not in CS_STORES_SHOW:
+            continue
+        try:
+            price = float(d.get("price", 0))
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+        cur = best.get(sid)
+        if cur is None or price < cur["price_usd"]:
+            best[sid] = {
+                "store":     CS_STORES.get(sid, "Loja"),
+                "price_usd": price,
+                "url":       (f"https://www.cheapshark.com/redirect?dealID={d.get('dealID')}"
+                              if d.get("dealID") else ""),
+            }
+    return list(best.values())
+
+
+def _check_one_low(game: dict) -> tuple[str, bool, float, float, list]:
     """
-    Retorna (appid, is_historical_low, cheapest_ever_usd, current_usd).
-    A conversão para BRL é feita em enrich_historical_lows usando o preço BRL do jogo.
+    Retorna (appid, is_historical_low, cheapest_ever_usd, current_usd, stores_usd).
+    A conversão para BRL é feita no chamador usando o preço BRL do jogo. `stores_usd`
+    é a lista de menores deals por loja (Steam/GOG/Fanatical/…), preços em USD.
     """
     appid = game["appid"]
     try:
         step1 = _cs_get("/games", {"steamAppID": appid})
         if not step1 or not isinstance(step1, list) or not step1:
-            return appid, False, 0.0, 0.0
+            return appid, False, 0.0, 0.0, []
         game_id = step1[0].get("gameID", "")
         if not game_id:
-            return appid, False, 0.0, 0.0
+            return appid, False, 0.0, 0.0, []
 
         step2 = _cs_get("/games", {"id": game_id})
         if not step2 or not isinstance(step2, dict):
-            return appid, False, 0.0, 0.0
+            return appid, False, 0.0, 0.0, []
+
+        deals = step2.get("deals", []) or []
+        stores_usd = _best_deals_by_store(deals)
 
         cheapest_str = step2.get("cheapestPriceEver", {}).get("price", "")
         if not cheapest_str:
-            return appid, False, 0.0, 0.0
+            return appid, False, 0.0, 0.0, stores_usd
         cheapest_ever = float(cheapest_str)
         if cheapest_ever <= 0:
-            return appid, False, 0.0, 0.0
+            return appid, False, 0.0, 0.0, stores_usd
 
         steam_deal = next(
-            (d for d in step2.get("deals", []) if str(d.get("storeID")) == "1"),
+            (d for d in deals if str(d.get("storeID")) == "1"),
             None,
         )
         if not steam_deal:
-            return appid, False, cheapest_ever, 0.0
+            return appid, False, cheapest_ever, 0.0, stores_usd
 
         current_usd = float(steam_deal.get("price", 0))
         is_low = current_usd > 0 and current_usd <= cheapest_ever * 1.02
-        return appid, is_low, cheapest_ever, current_usd
+        return appid, is_low, cheapest_ever, current_usd, stores_usd
     except Exception:
-        return appid, False, 0.0, 0.0
+        return appid, False, 0.0, 0.0, []
 
 
 def apply_low_cache(games: list[dict], cache_path: str) -> None:
@@ -530,6 +574,7 @@ def apply_low_cache(games: list[dict], cache_path: str) -> None:
             g["low_price_brl"] = ent.get("low_str") or (_fmt_brl(low_brl) if low_brl > 0 else "")
             g["low_src"] = "cs"
             g["historical_low"] = bool(cur_brl > 0 and low_brl > 0 and cur_brl <= low_brl * 1.02)
+            g["stores"] = ent.get("stores") or []
             continue
 
         # ── Fallback OBSERVADO: sem dado do CheapShark ainda → mostra o MENOR
@@ -578,8 +623,12 @@ def seed_low_cache(games: list[dict], cache_path: str) -> None:
     cache = _load_low_cache(cache_path)
     # Verifica o que falta E o que está como "obs" (baixa não-verificada de runs
     # antigas em que o CheapShark falhou): só confiamos em baixa REAL (src="cs").
-    needs = [g for g in games if g.get("appid")
-             and cache.get(g["appid"], {}).get("src") != "cs"]
+    # Também re-verifica jogos já "cs" que ainda não tiveram as LOJAS coletadas
+    # (feature nova) — uma vez só, marcado por "stores_checked".
+    def _needs(g):
+        ent = cache.get(g.get("appid"), {})
+        return ent.get("src") != "cs" or not ent.get("stores_checked")
+    needs = [g for g in games if g.get("appid") and _needs(g)]
     if not needs:
         print("  Baixa histórica: cache cobre todos os jogos (0 chamadas externas).")
         return
@@ -593,24 +642,197 @@ def seed_low_cache(games: list[dict], cache_path: str) -> None:
         done = 0
         for fut in as_completed(futures):
             g = futures[fut]
-            _appid, _is_low, cheapest_usd, current_usd = fut.result()
+            _appid, _is_low, cheapest_usd, current_usd, stores_usd = fut.result()
             brl_val = _parse_brl(g.get("sale_price", ""))
+            ratio = (brl_val / current_usd) if (brl_val > 0 and current_usd > 0) else 0.0
+
+            # Preços multi-loja convertidos p/ BRL pelo mesmo ratio da baixa (USD→BRL).
+            stores_brl = []
+            if ratio > 0 and stores_usd:
+                for s in stores_usd:
+                    pbrl = round(s["price_usd"] * ratio, 2)
+                    stores_brl.append({"store": s["store"], "price": _fmt_brl(pbrl),
+                                       "price_brl": pbrl, "url": s.get("url", "")})
+                stores_brl.sort(key=lambda x: x["price_brl"])
+                for i, s in enumerate(stores_brl):
+                    s["best"] = (i == 0)
+
             # Só grava baixa VERIFICADA do CheapShark. Sem dado/erro (429) → NÃO
             # cacheia (mostra "—" e tenta de novo na próxima execução). Nada de
             # "obs" (preço atual fingindo de baixa histórica).
-            if cheapest_usd > 0 and brl_val > 0 and current_usd > 0:
-                low_brl = cheapest_usd * (brl_val / current_usd)
+            if cheapest_usd > 0 and ratio > 0:
+                low_brl = cheapest_usd * ratio
                 cache[g["appid"]] = {
                     "low_brl": round(low_brl, 2),
                     "low_str": _fmt_brl(low_brl),
                     "src":     "cs",
                     "beaten":  False,
+                    "stores":  stores_brl,
+                    "stores_checked": True,
                     "updated": datetime.now().isoformat(timespec="seconds"),
                 }
                 _save_low_cache(cache_path, cache)   # grava cada baixa na hora → resumível
+            elif ratio > 0 and cache.get(g["appid"], {}).get("src") == "cs":
+                # Já tínhamos a baixa cs; só faltavam as lojas → completa sem re-baixar.
+                cache[g["appid"]]["stores"] = stores_brl
+                cache[g["appid"]]["stores_checked"] = True
+                _save_low_cache(cache_path, cache)
             done += 1
             print(f"\r  CheapShark: {done}/{n}...", end="", flush=True)
     print()
+
+# ─── Metadados: gênero / tags / Steam Deck (Steam appdetails) ─────────────────
+# Enriquece cada jogo com gêneros, algumas tags de jogabilidade e a compatibilidade
+# com o Steam Deck. Como o appdetails é bem rate-limited, semeamos um LOTE pequeno
+# por execução e cacheamos em meta_cache.json (gênero nunca muda; Deck quase nunca).
+META_CACHE_NAME = "meta_cache.json"
+META_BATCH      = 80
+META_INTERVAL   = 1.5          # ~40 req/min — gentil com o appdetails da Steam
+
+# Categorias (multiplayer) que viram "tag" de jogabilidade além do gênero.
+_CAT_KEEP = {"Co-op", "Online Co-op", "Local Co-op", "Multi-player",
+             "PvP", "Massively Multiplayer"}
+# resolved_category do relatório de Deck → rótulo do frontend.
+_DECK_MAP = {0: "unknown", 1: "unsupported", 2: "playable", 3: "verified"}
+
+_meta_lock    = _threading.Lock()
+_meta_last    = [0.0]
+_meta_blocked = [False]
+_meta_streak  = [0]
+
+
+def _steam_get(url: str, params: dict):
+    """GET a um endpoint da store da Steam com rate limit + circuit breaker (429)."""
+    if _meta_blocked[0]:
+        return None
+    with _meta_lock:
+        gap = META_INTERVAL - (time.time() - _meta_last[0])
+        if gap > 0:
+            time.sleep(gap)
+        _meta_last[0] = time.time()
+    try:
+        r = requests.get(url, params=params, headers=HEADERS, cookies=COOKIES, timeout=15)
+        if r.status_code == 429:
+            _meta_streak[0] += 1
+            if _meta_streak[0] >= 5:
+                _meta_blocked[0] = True
+            return None
+        if r.status_code == 200:
+            _meta_streak[0] = 0
+            return r.json()
+        return None
+    except Exception:
+        return None
+
+
+def _fetch_meta_one(appid: str) -> dict | None:
+    """Busca gêneros/tags (appdetails) + Deck (relatório de compat). None se falhar."""
+    d = _steam_get("https://store.steampowered.com/api/appdetails",
+                   {"appids": appid, "cc": "br", "l": "portuguese"})
+    node = (d or {}).get(str(appid)) if isinstance(d, dict) else None
+    if not node or not node.get("success"):
+        return None
+    data = node.get("data") or {}
+    genres = [g.get("description") for g in (data.get("genres") or []) if g.get("description")][:4]
+    cats   = [c.get("description") for c in (data.get("categories") or []) if c.get("description")]
+    tags   = []
+    for t in genres[:3] + [c for c in cats if c in _CAT_KEEP]:
+        if t and t not in tags:
+            tags.append(t)
+    tags = tags[:4]
+
+    deck = "unknown"
+    dj = _steam_get("https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport",
+                    {"nAppID": appid, "l": "english"})
+    if isinstance(dj, dict):
+        cat = (dj.get("results") or {}).get("resolved_category")
+        if isinstance(cat, int):
+            deck = _DECK_MAP.get(cat, "unknown")
+    return {"genres": genres, "tags": tags, "deck": deck,
+            "updated": datetime.now().isoformat(timespec="seconds")}
+
+
+def apply_meta_cache(games: list[dict], cache_path: str) -> None:
+    """Aplica o cache de metadados a TODOS os jogos (sem rede)."""
+    cache = _load_low_cache(cache_path)   # mesmo helper de I/O de JSON
+    for g in games:
+        ent = cache.get(g.get("appid", ""))
+        if isinstance(ent, dict):
+            g["genres"] = ent.get("genres") or []
+            g["tags"]   = ent.get("tags") or []
+            g["deck"]   = ent.get("deck") or "unknown"
+
+
+def seed_meta_cache(games: list[dict], cache_path: str) -> None:
+    """Semeia metadados p/ os jogos ainda não cacheados (lote pequeno, resumível)."""
+    cache = _load_low_cache(cache_path)
+    needs = [g for g in games if g.get("appid") and g["appid"] not in cache]
+    if not needs:
+        print("  Metadados: cache cobre todos os jogos (0 chamadas externas).")
+        return
+    total = len(needs)
+    needs = needs[:META_BATCH]
+    print(f"  Metadados: buscando {len(needs)}/{total} jogos (gênero/tags/Deck; "
+          f"lote diário, o resto vem depois)...")
+    done = 0
+    for g in needs:
+        if _meta_blocked[0]:
+            print("\n  [!] appdetails limitou o IP — para o lote (continua amanhã).")
+            break
+        meta = _fetch_meta_one(g["appid"])
+        if meta:
+            cache[g["appid"]] = meta
+            _save_low_cache(cache_path, cache)   # grava na hora → resumível
+        done += 1
+        print(f"\r  appdetails: {done}/{len(needs)}...", end="", flush=True)
+    print()
+
+
+# ─── Histórico de preço (série diária, acumulada) ─────────────────────────────
+# Sem fonte pública de histórico Steam sem API key; então acumulamos 1 ponto/dia
+# (o preço promocional observado) em price_series.json. A sparkline enche com o
+# tempo — honesto, no mesmo espírito da baixa "observada".
+PRICE_SERIES_NAME = "price_series.json"
+PRICE_SERIES_MAX  = 24
+
+
+def record_price_history(games: list[dict], path: str) -> None:
+    """Anexa o ponto de hoje (preço promo) por jogo e expõe g['price_history']."""
+    series = _load_low_cache(path)
+    today = datetime.now().strftime("%Y-%m-%d")
+    dirty = False
+    for g in games:
+        appid = g.get("appid", "")
+        p = _parse_brl(g.get("sale_price", ""))
+        if not appid or p <= 0:
+            continue
+        pts = series.get(appid)
+        if not isinstance(pts, list):
+            pts = []
+        if pts and pts[-1].get("d") == today:
+            if abs(float(pts[-1].get("p", 0)) - p) > 0.005:
+                pts[-1]["p"] = round(p, 2)
+                dirty = True
+        else:
+            pts.append({"d": today, "p": round(p, 2)})
+            dirty = True
+        if len(pts) > PRICE_SERIES_MAX:
+            pts = pts[-PRICE_SERIES_MAX:]
+            dirty = True
+        series[appid] = pts
+        g["price_history"] = pts
+    if dirty:
+        _save_low_cache(path, series)
+
+
+def apply_price_history(games: list[dict], path: str) -> None:
+    """Anexa a série já existente aos jogos (sem gravar) — usado na fase 1."""
+    series = _load_low_cache(path)
+    for g in games:
+        pts = series.get(g.get("appid", ""))
+        if isinstance(pts, list):
+            g["price_history"] = pts
+
 
 # ─── Output terminal ──────────────────────────────────────────────────────────
 
@@ -649,8 +871,6 @@ def print_results(by_block: dict[str, list[dict]], total_collected: int):
         top = games[:MAX_PER_BLOCK]
         for i, g in enumerate(top, 1):
             is_low   = g.get("historical_low", False)
-            is_low    = g.get("historical_low", False)
-            low_usd   = g.get("low_price_brl", "")
             row_col   = "\033[92m" if is_low else ""
             low_tag   = f" {BOLD}\033[92m★{RESET}" if is_low else ""
             low_brl   = g.get("low_price_brl", "")
@@ -909,6 +1129,8 @@ JSON_GAME_FIELDS = [
     "appid", "name", "discount", "orig_price", "sale_price",
     "pct_positive", "total_reviews", "score", "block",
     "historical_low", "low_price_brl", "is_new", "img_url", "url",
+    # enriquecidos (v2): capa larga, gênero/tags, Steam Deck, multi-loja, histórico
+    "header_img", "genres", "tags", "deck", "stores", "price_history",
 ]
 
 
@@ -950,6 +1172,13 @@ def build_json_payload(by_block: dict[str, list[dict]], total_collected: int) ->
             row["low_price_brl"]  = g.get("low_price_brl") or ""
             row["low_src"]        = g.get("low_src") or ""   # "cs"=CheapShark · "obs"=menor observado
             row["reviews_human"]  = fmt_num(int(g.get("total_reviews") or 0))
+            # enriquecidos: garante defaults limpos (listas/strings) p/ o frontend
+            row["header_img"]     = g.get("header_img") or ""
+            row["genres"]         = g.get("genres") or []
+            row["tags"]           = g.get("tags") or []
+            row["deck"]           = g.get("deck") or ""
+            row["stores"]         = g.get("stores") or []
+            row["price_history"]  = g.get("price_history") or []
             serialized.append(row)
         blocks.append({
             "name":  block_name,
@@ -1008,6 +1237,8 @@ def main():
     _state_anchor = json_path or out_path
     state_path = os.path.join(os.path.dirname(_state_anchor) or ".", "_prev_appids.json")
     hist_cache_path = os.path.join(os.path.dirname(_state_anchor) or ".", HIST_CACHE_NAME)
+    meta_cache_path = os.path.join(os.path.dirname(_state_anchor) or ".", META_CACHE_NAME)
+    price_series_path = os.path.join(os.path.dirname(_state_anchor) or ".", PRICE_SERIES_NAME)
 
     numeric = [a for a in args if a.isdigit()]
     if numeric:
@@ -1047,9 +1278,11 @@ def main():
     for k in by_block:
         by_block[k].sort(key=lambda x: x["score"], reverse=True)
 
-    # FASE 1 — aplica as baixas JÁ presentes no cache (sem rede) e publica
-    # imediatamente, pra página aparecer rápido já com as baixas conhecidas.
+    # FASE 1 — aplica o que JÁ está em cache (sem rede) e publica imediatamente:
+    # baixas históricas, metadados (gênero/tags/Deck) e histórico de preço.
     apply_low_cache(unique, hist_cache_path)
+    apply_meta_cache(unique, meta_cache_path)
+    apply_price_history(unique, price_series_path)
     if output_html:
         save_html(generate_html(by_block, len(unique)), out_path)
         print(f"\n[fase 1] lista publicada em {out_path}")
@@ -1057,10 +1290,13 @@ def main():
         save_json(by_block, len(unique), json_path)
         print(f"[fase 1] JSON publicado em {json_path} (com as baixas do cache)")
 
-    # FASE 2 — semeia os jogos ainda não cacheados (CheapShark, lento e resumível),
-    # reaplica o cache e republica grifando os em baixa histórica.
+    # FASE 2 — semeia os jogos ainda não cacheados (CheapShark + appdetails, lentos
+    # e resumíveis), reaplica os caches e republica com tudo enriquecido.
     seed_low_cache(unique, hist_cache_path)
     apply_low_cache(unique, hist_cache_path)
+    seed_meta_cache(unique, meta_cache_path)
+    apply_meta_cache(unique, meta_cache_path)
+    record_price_history(unique, price_series_path)
 
     print_results(by_block, len(unique))
 

@@ -21,12 +21,19 @@ compara com a **sua wishlist** e ainda rastreia os **jogos grátis da Epic**.
 ## ✨ O que faz
 
 - 🏆 **Ranking por qualidade real** — score 0–10 que pondera *quão boas são as reviews*, *quantas são* e *quanto está de desconto*. Um jogo nota 9 com 500 mil reviews vale mais que um "95%" com 60 reviews.
+- 🎨 **Interface em cards ou tabela** — alterne entre uma **grade visual** (capa, gauge de score colorido, sparkline de preço) e a **tabela densa** pra quem quer varrer tudo. A escolha fica salva no navegador.
+- 🌗 **Tema claro/escuro** — botão no topo, também persistido localmente.
+- 📊 **Hero com stats ao vivo** — total rankeado, quantos estão na baixa histórica, favoritos (e quantos deles em baixa!) e o melhor score do dia.
+- 💰 **"Esse preço é bom mesmo?"** — cada jogo ganha um selo (**MENOR PREÇO / ÓTIMO / BOM / OK**) e o **% acima da baixa histórica**, então dá pra ver na hora se vale comprar agora ou esperar.
+- ⭐ **Favoritos (sem login)** — favorite jogos (salvos no navegador) e filtre só por eles; o app avisa quando um favorito bate a **baixa histórica**.
+- 🎮 **Steam Deck + gênero** — badge de compatibilidade com o Deck (Verificado/Jogável/Não suportado) e **filtro por gênero**.
+- 🏬 **Comparação multi-loja** — quando **GOG, Fanatical, Epic** (etc.) estão mais baratos que a Steam, aparece a **melhor loja** com o % de economia (via CheapShark).
 - 🎯 **Mostra só a nata** — por padrão exibe os jogos **score 7–10**; o resto fica num *"Ver mais"* ao fim de cada bloco de avaliação.
-- 🔎 **Filtros e busca** — por nome, desconto mínimo, avaliação mínima, e ordenação (score, maior desconto, mais reviews, melhor avaliação, menor preço).
-- 🏷️ **Legenda clicável** — clique em **NEW**, **Baixa histórica** ou **Wishlist** pra filtrar só aqueles jogos.
+- 🔎 **Filtros e busca** — por nome, gênero, desconto mínimo, avaliação mínima, e ordenação (score, maior desconto, **mais perto da baixa**, mais reviews, melhor avaliação, menor preço).
+- 🏷️ **Legenda clicável** — clique em **Favoritos**, **NEW**, **Baixa histórica** ou **Wishlist** pra filtrar só aqueles jogos.
 - ❤️ **Compara com a sua wishlist** — cole o link do seu perfil Steam e os jogos da sua lista de desejos em promoção ficam grifados. **Sem precisar de API key.**
-- 🟡 **Baixa histórica** — destaca em amarelo os jogos no **menor preço de todos os tempos** (via CheapShark).
-- 🟢 **NEW** — destaca em verde o que **entrou em promoção hoje** (compara com a geração de ontem).
+- 🟡 **Baixa histórica** — destaca os jogos no **menor preço de todos os tempos** (via CheapShark).
+- 🟢 **NEW** — destaca o que **entrou em promoção hoje** (compara com a geração de ontem).
 - 🎁 **Aba de jogos grátis** — os *gratuitos pra resgatar e ficar* da **Epic Games Store**, com "grátis agora", "em breve" e **histórico** do que já passou.
 
 ---
@@ -186,16 +193,21 @@ Os dados são atualizados por **cron** (uma imagem `steam-gen` serve os dois job
 |---|---|---|
 | `DATA_FILE` | `data/games.json` | Caminho do JSON da lista |
 | `FREE_FILE` | `data/free_games.json` | Caminho do JSON dos grátis |
+| `EPIC_FILE` | `data/epic_games.json` | Caminho do JSON das promoções Epic |
+| `GAMEPASS_FILE` | `data/gamepass.json` | Caminho do JSON do Game Pass |
 | `PORT` (via gunicorn) | `8000` | Porta da app |
 
-Constantes do gerador (em `steam_sale_ranker.py`): `MIN_REVIEWS=2000`, `MIN_DISCOUNT=15`, `COUNT_PER_PAGE=50`, rate limit CheapShark `2 req/s`.
+Constantes do gerador (em `steam_sale_ranker.py`): `MIN_REVIEWS=2000`, `MIN_DISCOUNT=15`, `COUNT_PER_PAGE=50`, `SEED_BATCH=120` (baixa/loja CheapShark por run), `META_BATCH=80` (gênero/Deck via appdetails por run).
+
+Caches persistentes (no volume `data/`, ao lado do `games.json`): `historical_lows.json` (baixa + multi-loja), `meta_cache.json` (gênero/tags/Deck) e `price_series.json` (histórico de preço, 1 ponto/dia). Todos enchem incrementalmente e são resumíveis — um timeout no meio não perde progresso.
 
 ---
 
 ## 🙏 Fontes de dados
 
 - **Steam Store Search API** — jogos em promoção e contagem de reviews
-- **CheapShark API** — menor preço histórico (rate limit respeitado: 2 req/s)
+- **Steam appdetails** + relatório de compat. do Deck — gênero, tags e Steam Deck
+- **CheapShark API** — menor preço histórico **e** preços multi-loja (GOG/Fanatical/Epic…), rate limit respeitado (2 req/s)
 - **Steam Web API** (`IWishlistService` / `IPlayerService`) — wishlist e biblioteca
 - **Epic Games** (`freeGamesPromotions`) — jogos grátis
 
