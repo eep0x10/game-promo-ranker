@@ -93,7 +93,12 @@ function qsealHtml(g) {
   const pct = q.pctAbove <= 1 ? "na baixa" : `+${q.pctAbove}%`;
   const tip = q.verified ? "vs. menor preço de todos os tempos (CheapShark)"
                          : "vs. menor preço observado (ainda não confirmado como recorde)";
-  return `<span class="qseal ${q.tier}" title="${escapeHtml(tip)}">${q.label}<span class="pct">${pct}${q.verified ? "" : " ~"}</span></span>`;
+  // Quem NÃO está na baixa (OK/BOM/ÓTIMO): mostra o preço EXATO da baixa histórica
+  // ao lado, pra saber quanto o jogo já custou no menor.
+  const lowRef = (q.tier !== "best" && q.lowStr)
+    ? `<span class="qseal-low" title="menor preço de sempre${q.verified ? " (CheapShark)" : " (observado)"}">↓ ${escapeHtml(q.lowStr)}${q.verified ? "" : " ~"}</span>`
+    : "";
+  return `<span class="qseal ${q.tier}" title="${escapeHtml(tip)}">${q.label}<span class="pct">${pct}${q.verified ? "" : " ~"}</span>${lowRef}</span>`;
 }
 
 // Steam Deck

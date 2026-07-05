@@ -309,6 +309,11 @@ a { color: inherit; }
 .qseal.good { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent); }
 .qseal.ok   { background: var(--surface-2); color: var(--text-dim); box-shadow: inset 0 0 0 1px var(--border); }
 .qseal .pct { font-weight: 600; opacity: .85; }
+.qseal-low {
+  font-weight: 700; font-size: .72rem; color: var(--gold); white-space: nowrap;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  padding-left: 6px; border-left: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+}
 
 /* sparkline + baixa */
 .spark-row { display: flex; align-items: center; gap: 9px; }
