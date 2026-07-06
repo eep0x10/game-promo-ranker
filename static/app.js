@@ -160,6 +160,11 @@ function gaugeHtml(score) {
   return `<span class="gauge"><i style="width:${w}%;background:var(--sc-${band})"></i></span>
           <span class="score-num" style="color:var(--sc-${band})">${s.toFixed(1)}</span>`;
 }
+function scoreNumHtml(score) {
+  const s = Number(score) || 0;
+  const band = scoreBand(s);
+  return `<span class="score-num" style="color:var(--sc-${band})">${s.toFixed(1)}</span>`;
+}
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 function itemCard(g, rank, isTail) {
@@ -242,7 +247,7 @@ function itemRow(g, rank, isTail) {
       <td class="orig">${escapeHtml(g.orig_price || "")}</td>
       <td class="sale">${escapeHtml(g.sale_price || "")}</td>
       <td class="low-ever">${lowCell}</td>
-      <td class="score-cell"><span class="sc-wrap">${gaugeHtml(g.score)}</span></td>
+      <td class="score-cell">${scoreNumHtml(g.score)}</td>
     </tr>`;
 }
 
@@ -250,7 +255,7 @@ function tableHead(sort) {
   const arrow = (key) => `<span class="arrow">${sort === key ? "▼" : "⇅"}</span>`;
   const cls = (key) => `sortable${sort === key ? " sorted" : ""}`;
   return `<thead><tr>
-    <th></th><th>#</th><th>Nome</th>
+    <th></th><th class="col-rank">#</th><th>Nome</th>
     <th class="${cls("discount")}" data-sort="discount">Desc ${arrow("discount")}</th>
     <th class="${cls("pct")}" data-sort="pct">Rev% ${arrow("pct")}</th>
     <th class="col-reviews ${cls("reviews")}" data-sort="reviews">Reviews ${arrow("reviews")}</th>

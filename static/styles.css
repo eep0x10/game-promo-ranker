@@ -365,7 +365,8 @@ thead th.sorted .arrow { opacity: 1; color: var(--accent); }
 tbody tr { border-top: 1px solid var(--border-soft); transition: background .12s; }
 tbody tr:hover { background: var(--surface-3); }
 td { padding: 7px 11px; vertical-align: middle; }
-td.rank { color: var(--text-dim); width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+thead th.col-rank, td.rank { width: 34px; text-align: left; font-variant-numeric: tabular-nums; }
+td.rank { color: var(--text-dim); }
 td.fav { width: 30px; text-align: center; }
 td.fav .fav-btn-t { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1rem; padding: 0; line-height: 1; }
 td.fav .fav-btn-t.on { color: var(--violet); }
@@ -380,10 +381,8 @@ td.reviews { width: 72px; color: var(--text-dim); white-space: nowrap; }
 td.orig { width: 96px; color: var(--text-dim); text-decoration: line-through; white-space: nowrap; }
 td.sale { width: 96px; font-weight: 700; color: var(--text-strong); white-space: nowrap; }
 td.low-ever { width: 130px; white-space: nowrap; }
-td.score-cell { width: 118px; }
-td.score-cell .sc-wrap { display: flex; align-items: center; gap: 8px; }
-td.score-cell .gauge { height: 6px; }
-td.score-cell .score-num { font-size: .86rem; min-width: 30px; }
+td.score-cell { width: 56px; white-space: nowrap; }
+td.score-cell .score-num { font-family: ui-monospace, monospace; font-weight: 800; font-size: .86rem; }
 
 .badge-inline { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 5px; font-size: .62rem; font-weight: 800; letter-spacing: .03em; vertical-align: middle; }
 .badge-inline.new  { background: var(--green); color: var(--green-ink); }
