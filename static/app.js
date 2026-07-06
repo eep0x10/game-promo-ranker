@@ -15,11 +15,14 @@ let COMPARE_ACTIVE = false;
 let TAGS = { fav: false, new: false, hist: false, wish: false };
 let FREE_PAYLOAD = null, EPIC_PAYLOAD = null, EPIC_ONLY_CHEAPER = false, GP_PAYLOAD = null;
 
-const SCORE_CUTOFF = 7.0;
+const BATCH_SIZE = 50;
 const LS = { view: "ssr_view", theme: "ssr_theme", favs: "ssr_favs" };
 
 let VIEW = "cards";                 // "cards" | "table"
 let FAVS = new Set();               // appids favoritados
+let CURRENT_FLAT_ITEMS = null;      // lista plana (filtros ativos) p/ carregar mais
+let loadObservers = [];
+const sentinelObservers = new WeakMap();
 
 // ─── Persistência ───────────────────────────────────────────────────────────
 function lsGet(k, def) { try { return localStorage.getItem(k) ?? def; } catch { return def; } }
@@ -167,13 +170,12 @@ function scoreNumHtml(score) {
 }
 
 // ─── Card ───────────────────────────────────────────────────────────────────
-function itemCard(g, rank, isTail) {
+function itemCard(g, rank) {
   const appid = String(g.appid || "");
   if (COMPARE_ACTIVE && OWNED.has(Number(appid))) return "";
   const wished = COMPARE_ACTIVE && WISHLIST.has(Number(appid));
   const isFav = FAVS.has(appid);
   const cls = ["card"];
-  if (isTail) cls.push("tail-row");
 
   const ribbon =
     (g.is_new ? '<span class="chip new">NEW</span>' : "") +
@@ -214,14 +216,13 @@ function itemCard(g, rank, isTail) {
 }
 
 // ─── Linha da tabela ────────────────────────────────────────────────────────
-function itemRow(g, rank, isTail) {
+function itemRow(g, rank) {
   const appid = String(g.appid || "");
   if (COMPARE_ACTIVE && OWNED.has(Number(appid))) return "";
   const wished = COMPARE_ACTIVE && WISHLIST.has(Number(appid));
   const isFav = FAVS.has(appid);
 
   const trCls = [];
-  if (isTail) trCls.push("tail-row");
   if (g.is_new) trCls.push("new-row");
   if (g.historical_low) trCls.push("hist-low");
   if (isFav) trCls.push("faved");
@@ -267,44 +268,118 @@ function tableHead(sort) {
 }
 
 // ─── Contêineres (bloco / lista plana) ──────────────────────────────────────
-function blockContainer(block, sort) {
-  const color = block.color || "#888";
-  let top = "", tail = "", topN = 0, tailN = 0, rank = 0;
+function blockGames(block) {
+  const out = [];
   for (const g of block.games) {
-    rank += 1;
-    const isTail = Number(g.score) < SCORE_CUTOFF;
-    const r = VIEW === "cards" ? itemCard(g, rank, isTail) : itemRow(g, rank, isTail);
-    if (!r) continue;
-    if (isTail) { tail += r; tailN += 1; } else { top += r; topN += 1; }
+    if (COMPARE_ACTIVE && OWNED.has(Number(g.appid))) continue;
+    out.push(g);
   }
-  const total = topN + tailN;
+  return out;
+}
+function renderGameChunk(games, startRank) {
+  let html = "", rank = startRank;
+  for (const g of games) {
+    rank += 1;
+    const r = VIEW === "cards" ? itemCard(g, rank) : itemRow(g, rank);
+    if (r) html += r;
+  }
+  return html;
+}
+function loadMoreSentinel(attrs) {
+  const parts = Object.entries(attrs).map(([k, v]) => `data-${k}="${v}"`).join(" ");
+  return `<div class="load-more-sentinel" ${parts} aria-hidden="true"></div>`;
+}
+function blockContainer(block, sort, blockIdx) {
+  const color = block.color || "#888";
+  const games = blockGames(block);
+  const total = games.length;
   if (!total) return "";
-  const collapsed = tailN > 0 ? " tail-collapsed" : "";
-  const toggle = tailN > 0
-    ? `<button class="tail-toggle" data-count="${tailN}" aria-expanded="false">▸ Ver mais ${tailN} jogos (score abaixo de ${SCORE_CUTOFF})</button>` : "";
+  const initial = games.slice(0, BATCH_SIZE);
+  const bodyInner = renderGameChunk(initial, 0);
+  const hasMore = total > BATCH_SIZE;
 
   const header = `<div class="block-header"><span class="block-dot" style="background:${color}"></span>
       <span class="block-name">${escapeHtml(block.name)}</span><span class="block-count">${total} jogos</span></div>`;
 
   const body = VIEW === "cards"
-    ? `<div class="cards-grid">${top}${tail}</div>`
-    : `<div class="table-scroll"><table>${tableHead(sort)}<tbody>${top}${tail}</tbody></table></div>`;
-  return `<div class="block${collapsed}">${header}${body}${toggle}</div>`;
+    ? `<div class="cards-grid block-items" data-loaded="${initial.length}">${bodyInner}</div>${hasMore ? loadMoreSentinel({ "block-idx": blockIdx }) : ""}`
+    : `<div class="table-scroll"><table>${tableHead(sort)}<tbody class="block-items" data-loaded="${initial.length}">${bodyInner}</tbody></table>${hasMore ? loadMoreSentinel({ "block-idx": blockIdx }) : ""}</div>`;
+  return `<div class="block" data-block-idx="${blockIdx}">${header}${body}</div>`;
 }
 
 function flatContainer(items, label, sort) {
-  let body = "", rank = 0;
-  for (const it of items) {
-    const r = VIEW === "cards" ? itemCard(it.g, rank + 1, false) : itemRow(it.g, rank + 1, false);
-    if (r) { body += r; rank += 1; }
-  }
-  if (!rank) return "";
+  const games = items.map((it) => it.g);
+  const total = games.length;
+  if (!total) return "";
+  const initial = games.slice(0, BATCH_SIZE);
+  const bodyInner = renderGameChunk(initial, 0);
+  const hasMore = total > BATCH_SIZE;
+
   const header = `<div class="block-header"><span class="block-dot" style="background:var(--accent)"></span>
-      <span class="block-name">${escapeHtml(label)}</span><span class="block-count">${rank} jogos</span></div>`;
+      <span class="block-name">${escapeHtml(label)}</span><span class="block-count">${total} jogos</span></div>`;
   const inner = VIEW === "cards"
-    ? `<div class="cards-grid">${body}</div>`
-    : `<div class="table-scroll"><table>${tableHead(sort)}<tbody>${body}</tbody></table></div>`;
-  return `<div class="block">${header}${inner}</div>`;
+    ? `<div class="cards-grid block-items" data-loaded="${initial.length}">${bodyInner}</div>${hasMore ? loadMoreSentinel({ flat: "1" }) : ""}`
+    : `<div class="table-scroll"><table>${tableHead(sort)}<tbody class="block-items" data-loaded="${initial.length}">${bodyInner}</tbody></table>${hasMore ? loadMoreSentinel({ flat: "1" }) : ""}</div>`;
+  return `<div class="block" data-flat="1">${header}${inner}</div>`;
+}
+function appendMoreGames(blockEl, games) {
+  const container = blockEl.querySelector(".block-items");
+  if (!container) return 0;
+  const loaded = Number(container.dataset.loaded) || 0;
+  const next = games.slice(loaded, loaded + BATCH_SIZE);
+  if (!next.length) return loaded;
+  container.insertAdjacentHTML("beforeend", renderGameChunk(next, loaded));
+  const newLoaded = loaded + next.length;
+  container.dataset.loaded = String(newLoaded);
+  return newLoaded;
+}
+function insertSentinel(blockEl, attrs) {
+  const html = loadMoreSentinel(attrs);
+  const scrollRoot = blockEl.querySelector(".table-scroll");
+  if (scrollRoot) scrollRoot.insertAdjacentHTML("beforeend", html);
+  else blockEl.insertAdjacentHTML("beforeend", html);
+  return blockEl.querySelector(".load-more-sentinel");
+}
+function observeSentinel(sentinel) {
+  const block = sentinel.closest(".block");
+  if (!block) return;
+  const prev = sentinelObservers.get(sentinel);
+  if (prev) prev.disconnect();
+  const scrollRoot = sentinel.closest(".table-scroll");
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(sentinel);
+      if (sentinel.dataset.flat) loadMoreFlat(block);
+      else loadMoreForBlock(block);
+    }
+  }, { root: scrollRoot || null, rootMargin: "120px", threshold: 0 });
+  observer.observe(sentinel);
+  loadObservers.push(observer);
+  sentinelObservers.set(sentinel, observer);
+}
+function refreshSentinel(blockEl, hasMore, attrs) {
+  let sentinel = blockEl.querySelector(".load-more-sentinel");
+  if (hasMore) {
+    if (!sentinel) sentinel = insertSentinel(blockEl, attrs);
+    observeSentinel(sentinel);
+  } else if (sentinel) {
+    sentinel.remove();
+  }
+}
+function loadMoreForBlock(blockEl) {
+  const idx = Number(blockEl.dataset.blockIdx);
+  const block = (PAYLOAD?.blocks || [])[idx];
+  if (!block) return;
+  const games = blockGames(block);
+  const newLoaded = appendMoreGames(blockEl, games);
+  refreshSentinel(blockEl, newLoaded < games.length, { "block-idx": idx });
+}
+function loadMoreFlat(blockEl) {
+  if (!CURRENT_FLAT_ITEMS) return;
+  const games = CURRENT_FLAT_ITEMS.map((it) => it.g);
+  const newLoaded = appendMoreGames(blockEl, games);
+  refreshSentinel(blockEl, newLoaded < games.length, { flat: "1" });
 }
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
@@ -370,34 +445,32 @@ function renderGames() {
       return passesFilter(g, f);
     });
     sortGames(items, f.sort);
+    CURRENT_FLAT_ITEMS = items;
     root.innerHTML = flatContainer(items, flatLabel(f), f.sort) ||
       '<div class="empty-tier">Nenhum jogo com esses filtros.</div>';
     wireDynamic();
     return;
   }
 
+  CURRENT_FLAT_ITEMS = null;
   let html = "";
-  for (const block of (PAYLOAD.blocks || [])) html += blockContainer(block, f.sort);
+  (PAYLOAD.blocks || []).forEach((block, i) => { html += blockContainer(block, f.sort, i); });
   root.innerHTML = html || '<div class="empty-tier">Nenhum jogo a exibir.</div>';
   wireDynamic();
 }
 
-// Liga os controles renderizados dinamicamente (tail toggles + sort headers).
+function wireInfiniteScroll() {
+  loadObservers.forEach((o) => o.disconnect());
+  loadObservers = [];
+  el("games-root").querySelectorAll(".load-more-sentinel").forEach((s) => observeSentinel(s));
+}
+
+// Liga os controles renderizados dinamicamente (sort headers + scroll infinito).
 function wireDynamic() {
-  el("games-root").querySelectorAll(".tail-toggle").forEach((btn) => btn.addEventListener("click", toggleTail));
+  wireInfiniteScroll();
   el("games-root").querySelectorAll("th.sortable").forEach((th) => th.addEventListener("click", () => {
     const sel = el("f-sort"); if (sel) { sel.value = th.dataset.sort; renderGames(); }
   }));
-}
-function toggleTail(e) {
-  const btn = e.currentTarget, block = btn.closest(".block");
-  if (!block) return;
-  const opened = block.classList.toggle("tail-collapsed") === false;
-  btn.setAttribute("aria-expanded", String(opened));
-  const n = btn.dataset.count || "";
-  btn.textContent = opened
-    ? `▾ Ocultar os ${n} jogos com score abaixo de ${SCORE_CUTOFF}`
-    : `▸ Ver mais ${n} jogos (score abaixo de ${SCORE_CUTOFF})`;
 }
 
 // ─── Hero: stats ao vivo + gênero ───────────────────────────────────────────
