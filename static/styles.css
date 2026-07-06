@@ -344,9 +344,20 @@ a { color: inherit; }
 .deck-cover .deck.unsupported { color: #ff8f8f; } .deck-cover .deck.unknown { color: #b9c4d0; }
 
 /* ─── Tabela ───────────────────────────────────────────────────────────── */
-.table-scroll { overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface); }
-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
-thead th { background: var(--surface-2); padding: 10px 11px; text-align: left; color: var(--text-dim); font-weight: 700; white-space: nowrap; position: sticky; top: 0; }
+.table-scroll {
+  overflow: auto;
+  max-height: min(72vh, 920px);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .84rem; }
+thead th {
+  background: var(--surface-2); padding: 10px 11px; text-align: left; color: var(--text-dim); font-weight: 700;
+  white-space: nowrap; position: sticky; top: 0; z-index: 2;
+  box-shadow: 0 1px 0 var(--border-soft);
+}
 thead th.sortable { cursor: pointer; user-select: none; }
 thead th.sortable:hover { color: var(--accent); }
 thead th .arrow { opacity: .5; font-size: .7rem; }
