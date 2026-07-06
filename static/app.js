@@ -435,7 +435,7 @@ function populateGenres() {
   const set = new Set();
   for (const { g } of allGames()) for (const x of (g.genres || [])) set.add(x);
   const cur = sel.value;
-  sel.innerHTML = '<option value="">Todos os gêneros</option>' +
+  sel.innerHTML = '<option value="">Gênero</option>' +
     [...set].sort().map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
   if (cur) sel.value = cur;
   sel.classList.toggle("hidden", set.size === 0);
